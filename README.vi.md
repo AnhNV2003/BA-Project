@@ -20,6 +20,22 @@ chặn gian lận và không gây phiền khách hàng hợp lệ?*
   tuổi tài khoản, …), sinh bởi `src/synth_context.py`. Mọi cột được ghi rõ trong
   **`docs/data_dictionary.md`**.
 
+## 📥 Tải dữ liệu từ Google Drive
+
+Các file nặng **không** nằm trong git. Tải từ Drive của nhóm rồi đặt đúng thư mục:
+
+**🔗 Link Drive:** https://drive.google.com/drive/folders/1JAhxTGWeXHifeDl3QinpvAfwxxjkF6oR?usp=sharing
+
+| File trên Drive | Cách xử lý | Bắt buộc? |
+|---|---|---|
+| `archive.zip` (178MB) | Giải nén, bỏ `PS_20174392719_1491204439457_log.csv` vào `data/raw/` | ✅ **Bắt buộc** |
+| `transactions_context.parquet` (82MB) | Đặt vào `data/processed/` | Tuỳ chọn (khỏi build lại) |
+| `transactions_clean.parquet` (88MB) | Đặt vào `data/processed/` | Tuỳ chọn |
+
+> Chỉ cần giải nén **`archive.zip`** lấy CSV bỏ vào `data/raw/` là chạy được toàn
+> bộ pipeline — 2 file parquet chỉ để khỏi phải build lại
+> (`python src/build_dataset.py`).
+
 ## Cài đặt
 
 ```bash
