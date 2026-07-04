@@ -1,0 +1,38 @@
+# =====================================================================
+# HEAVY files -> Google Drive, NOT git (regenerate or download instead)
+# =====================================================================
+# Raw PaySim dataset (~471MB) — download from Kaggle into data/raw/
+data/raw/*
+!data/raw/.gitkeep
+
+# Kaggle download archive left in the repo root (~178MB)
+*.zip
+
+# Big processed datasets (~80-90MB each) — regenerate: python src/build_dataset.py
+data/processed/*.parquet
+
+# Synthetic caches (regenerate on first run) — customer master + stand-in
+data/synthetic/*
+!data/synthetic/.gitkeep
+
+# Large generated HTML report (~4MB) — regenerate: python monitoring/drift.py
+monitoring/reports/*.html
+
+# =====================================================================
+# KEPT in git on purpose (small + useful after clone):
+#   data/processed/sample_preview.csv   (Streamlit demo runs without big files)
+#   models/fraud_model.joblib           (API/demo run after clone)
+#   docs/figures/*.png, docs/*.md, monitoring/reports/*.md
+# =====================================================================
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.ipynb_checkpoints/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
