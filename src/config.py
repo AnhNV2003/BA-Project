@@ -1,16 +1,8 @@
-"""Central configuration: paths, seed, schema, and business-cost assumptions.
-
-Keeping these in one place means every module (data gen, EDA, modeling,
-serving) shares the same definitions — important for reproducibility and for
-the data dictionary / report to stay in sync with the code.
-"""
 from __future__ import annotations
 
 from pathlib import Path
 
-# ----------------------------------------------------------------------------
-# Paths (all relative to the repo root, so the code runs from anywhere)
-# ----------------------------------------------------------------------------
+
 ROOT = Path(__file__).resolve().parents[1]
 DATA_RAW = ROOT / "data" / "raw"
 DATA_SYNTH = ROOT / "data" / "synthetic"
@@ -18,9 +10,10 @@ DATA_PROCESSED = ROOT / "data" / "processed"
 DOCS = ROOT / "docs"
 FIGURES = DOCS / "figures"
 MODELS = ROOT / "models"
+LOGS = ROOT / "logs"
 
-for _p in (DATA_RAW, DATA_SYNTH, DATA_PROCESSED, FIGURES, MODELS):
-    _p.mkdir(parents=True, exist_ok=True)
+for folder in (DATA_RAW, DATA_SYNTH, DATA_PROCESSED, FIGURES, MODELS, LOGS):
+    folder.mkdir(parents=True, exist_ok=True)
 
 # ----------------------------------------------------------------------------
 # Reproducibility
@@ -28,10 +21,9 @@ for _p in (DATA_RAW, DATA_SYNTH, DATA_PROCESSED, FIGURES, MODELS):
 SEED = 42
 
 # ----------------------------------------------------------------------------
-# Base (PaySim) schema — the columns the real Kaggle CSV must contain.
-# We use this to (a) validate the real file when it arrives, and
-# (b) generate a schema-identical stand-in so the pipeline runs before the
-# download is done.
+# Active PaySim schema — the columns the real Kaggle CSV must contain.
+# We use this to validate the real file and generate a schema-identical
+# stand-in only if the CSV is unavailable.
 # ----------------------------------------------------------------------------
 PAYSIM_COLUMNS = [
     "step",            # unit of time = 1 hour of simulation (1..743 ~ 30 days)

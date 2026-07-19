@@ -18,6 +18,13 @@ data/synthetic/*
 # Large generated HTML report (~4MB) — regenerate: python monitoring/drift.py
 monitoring/reports/*.html
 
+# Runtime logs
+logs/*.log
+train.log
+
+# Unrelated one-off script (different project's dataset download)
+install_kaggle.py
+
 # =====================================================================
 # KEPT in git on purpose (small + useful after clone):
 #   data/processed/sample_preview.csv   (Streamlit demo runs without big files)

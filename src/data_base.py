@@ -16,6 +16,8 @@ import pandas as pd
 from config import (
     DATA_RAW,
     DATA_SYNTH,
+    PAYSIM_CSV,
+    PAYSIM_DIR,
     PAYSIM_COLUMNS,
     FRAUD_TYPES,
     SEED,
@@ -29,9 +31,18 @@ STANDIN_PATH = DATA_SYNTH / "paysim_standin.csv"
 # ---------------------------------------------------------------------------
 # Real CSV discovery + validation
 # ---------------------------------------------------------------------------
-def find_real_csv() -> "pd.Path | None":
-    """Return the first CSV in data/raw/ whose columns match the PaySim schema."""
-    for path in sorted(DATA_RAW.glob("*.csv")):
+def find_real_csv():
+    """Return the configured PaySim CSV, or first matching CSV fallback."""
+    candidates = []
+    if PAYSIM_CSV.exists():
+        candidates.append(PAYSIM_CSV)
+    candidates.extend(sorted(PAYSIM_DIR.glob("*.csv")) if PAYSIM_DIR.exists() else [])
+    candidates.extend(sorted(DATA_RAW.glob("*.csv")))
+    seen = set()
+    for path in candidates:
+        if path in seen:
+            continue
+        seen.add(path)
         try:
             head = pd.read_csv(path, nrows=5)
         except Exception:

@@ -1,116 +1,261 @@
-"""Data cleaning (Module 3, draft).
-
-Runs conservative, DOCUMENTED cleaning on the processed dataset and writes a
-before/after report to docs/cleaning_report.md plus a cleaned parquet.
-
-Philosophy: PaySim is already tidy, so cleaning here is mostly *validation* +
-documenting known quirks. We do NOT "fix" the balance-error signature (that is
-fraud signal, not dirt).
-
-Run:  python cleaning.py
-"""
+"""Conservative data cleaning and validation for PaySim (Module 3)."""
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
 
 from config import DATA_PROCESSED, DOCS, PAYSIM_COLUMNS
+from synth_context import _BROWSERS, _COUNTRIES, _OS
+
+
+VALID_TYPES = {"PAYMENT", "TRANSFER", "CASH_OUT", "CASH_IN", "DEBIT"}
 
 
 def load() -> pd.DataFrame:
-    p = DATA_PROCESSED / "transactions_context.parquet"
-    if not p.exists():
-        p = p.with_suffix(".csv")
-    return pd.read_parquet(p) if p.suffix == ".parquet" else pd.read_csv(p)
+    path = DATA_PROCESSED / "transactions_context.parquet"
+    if not path.exists():
+        path = path.with_suffix(".csv")
+    return pd.read_parquet(path) if path.suffix == ".parquet" else pd.read_csv(path)
 
 
-def main():
+def missing_table(df: pd.DataFrame, *, only_nonzero: bool = False) -> pd.DataFrame:
+    rows = []
+    for col, n_missing in df.isna().sum().items():
+        if only_nonzero and n_missing == 0:
+            continue
+        rows.append({
+            "column": col,
+            "missing": int(n_missing),
+            "missing_pct": round(float(n_missing / len(df) * 100), 4),
+        })
+    return pd.DataFrame(rows)
+
+
+def category_profile(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    rows = []
+    for col in columns:
+        if col not in df:
+            rows.append({"column": col, "nunique": 0, "values": "missing column"})
+            continue
+        values = sorted(str(v) for v in df[col].dropna().unique())
+        preview = ", ".join(values[:20])
+        if len(values) > 20:
+            preview += f", ... (+{len(values) - 20} more)"
+        rows.append({"column": col, "nunique": len(values), "values": preview})
+    return pd.DataFrame(rows)
+
+
+def validate_category(df: pd.DataFrame, col: str, valid: set[str]) -> tuple[pd.Series, pd.DataFrame]:
+    invalid = df[col].notna() & ~df[col].isin(valid)
+    invalid_values = (
+        df.loc[invalid, col]
+        .value_counts(dropna=False)
+        .rename_axis("invalid_value")
+        .reset_index(name="count")
+    )
+    return invalid, invalid_values
+
+
+def normalize_categories(df: pd.DataFrame) -> tuple[pd.DataFrame, list[str], dict[str, pd.DataFrame]]:
+    out = df.copy()
+    decisions: list[str] = []
+
+    before_type = out["type"].copy()
+    out["type"] = out["type"].astype("string").str.strip().str.upper()
+    if (before_type.astype("string").fillna("<NA>") != out["type"].astype("string").fillna("<NA>")).any():
+        decisions.append("Normalized `type` with strip + uppercase.")
+
+    before_browser = out["browser"].copy()
+    browser_map = {v.casefold(): v for v in _BROWSERS}
+    out["browser"] = (
+        out["browser"].astype("string").str.strip().map(lambda v: browser_map.get(str(v).casefold(), v))
+    )
+    if (before_browser.astype("string").fillna("<NA>") != out["browser"].astype("string").fillna("<NA>")).any():
+        decisions.append("Normalized `browser` with strip + canonical generator casing.")
+
+    before_os = out["device_os"].copy()
+    os_map = {v.casefold(): v for v in _OS}
+    out["device_os"] = (
+        out["device_os"].astype("string").str.strip().map(lambda v: os_map.get(str(v).casefold(), v))
+    )
+    if (before_os.astype("string").fillna("<NA>") != out["device_os"].astype("string").fillna("<NA>")).any():
+        decisions.append("Normalized `device_os` with strip + canonical generator casing.")
+
+    before_country = out["billing_country"].copy()
+    out["billing_country"] = out["billing_country"].astype("string").str.strip().str.upper()
+    if (before_country.astype("string").fillna("<NA>") != out["billing_country"].astype("string").fillna("<NA>")).any():
+        decisions.append("Normalized `billing_country` with strip + uppercase.")
+
+    invalids: dict[str, pd.DataFrame] = {}
+    for col, valid in {
+        "type": VALID_TYPES,
+        "browser": set(_BROWSERS),
+        "device_os": set(_OS),
+        "billing_country": set(_COUNTRIES),
+    }.items():
+        invalid_mask, invalid_values = validate_category(out, col, valid)
+        invalids[col] = invalid_values
+        if invalid_mask.any():
+            out.loc[invalid_mask, col] = pd.NA
+            decisions.append(f"Set {int(invalid_mask.sum()):,} invalid `{col}` values to missing.")
+
+    if not decisions:
+        decisions.append("No category normalization or invalid-category repair was needed.")
+    return out, decisions, invalids
+
+
+def main() -> None:
     df = load()
-    before = len(df)
-    log = ["# Cleaning Report — E-Commerce Fraud Detection\n",
-           f"Input rows: **{before:,}**, columns: **{df.shape[1]}**\n"]
-    decisions = []
+    before_rows = len(df)
+    before_cols = df.shape[1]
+    before_fraud = int(df["isFraud"].sum())
+    before_rate = float(df["isFraud"].mean())
+    decisions: list[str] = []
 
-    # 1) Missing values -------------------------------------------------------
-    miss = df.isna().sum()
-    miss = miss[miss > 0]
-    log.append("## 1. Missing values\n")
-    if miss.empty:
-        log.append("No missing values in any column. ✅\n")
-    else:
-        log.append(miss.to_frame("n_missing").to_markdown() + "\n")
+    category_cols = ["type", "browser", "device_os", "billing_country"]
+    missing_before = missing_table(df)
+    category_before = category_profile(df, category_cols)
 
-    # 2) Exact duplicate transactions (on the base PaySim fields) -------------
     dup_mask = df.duplicated(subset=PAYSIM_COLUMNS, keep="first")
     n_dup = int(dup_mask.sum())
-    log.append("## 2. Duplicate base transactions\n")
-    log.append(f"Exact duplicates on PaySim fields: **{n_dup:,}**. "
-               f"{'Dropped.' if n_dup else 'None.'}\n")
     if n_dup:
         df = df.loc[~dup_mask].copy()
-        decisions.append(f"Dropped {n_dup:,} duplicate base transactions.")
+        decisions.append(f"Dropped {n_dup:,} duplicate base transactions, keeping first occurrence.")
+    else:
+        decisions.append("No duplicate base transactions found.")
 
-    # 3) Invalid amounts ------------------------------------------------------
+    df, category_decisions, invalid_category_values = normalize_categories(df)
+    decisions.extend(category_decisions)
+    category_after = category_profile(df, category_cols)
+
     n_neg = int((df["amount"] < 0).sum())
     n_zero = int((df["amount"] == 0).sum())
-    log.append("## 3. Invalid / zero amounts\n")
-    log.append(f"- Negative amounts: **{n_neg:,}** (removed)\n"
-               f"- Zero amounts: **{n_zero:,}** (kept — legal in PaySim, but flagged)\n")
     if n_neg:
         df = df.loc[df["amount"] >= 0].copy()
         decisions.append(f"Removed {n_neg:,} rows with negative amount.")
-    df["flag_zero_amount"] = (df["amount"] == 0).astype(int)
+    else:
+        decisions.append("No negative amount rows found.")
+    df["flag_zero_amount"] = (df["amount"] == 0).astype("int8")
+    decisions.append("Kept zero-amount rows and added `flag_zero_amount`.")
 
-    # 4) Amount outliers (document, do NOT clip — large txns are meaningful) --
-    q999 = df["amount"].quantile(0.999)
-    n_out = int((df["amount"] > q999).sum())
-    log.append("## 4. Amount outliers\n")
-    log.append(f"99.9th percentile = {q999:,.0f}. Rows above it: **{n_out:,}** "
-               f"({n_out/len(df):.3%}). **Kept** — extreme amounts are informative "
-               f"for fraud; we add a capped feature instead of dropping.\n")
-    df["amount_capped"] = df["amount"].clip(upper=q999)
+    amount_p99 = float(df["amount"].quantile(0.99))
+    amount_p999 = float(df["amount"].quantile(0.999))
+    amount_max = float(df["amount"].max())
+    amount_out_p99 = int((df["amount"] > amount_p99).sum())
+    amount_out_p999 = int((df["amount"] > amount_p999).sum())
+    df["amount_capped"] = df["amount"].clip(upper=amount_p999)
+    decisions.append("Kept amount outliers and added `amount_capped` at p99.9 for optional robust modelling.")
 
-    # 5) Known PaySim balance quirks (validate, don't fix) -------------------
+    step_invalid = int((~df["step"].between(1, 743)).sum())
+    if step_invalid:
+        decisions.append(f"Found {step_invalid:,} rows outside expected `step` range 1..743; documented only.")
+    else:
+        decisions.append("All `step` values are inside expected PaySim range 1..743.")
+
     dest_zero = int(((df["oldbalanceDest"] == 0) & (df["newbalanceDest"] == 0) & (df["amount"] > 0)).sum())
     err_orig = df["oldbalanceOrg"] - df["amount"] - df["newbalanceOrig"]
-    n_err = int((err_orig.abs() > 1e-6).sum())
-    log.append("## 5. Known PaySim balance quirks (documented, NOT modified)\n")
-    log.append(f"- Destination balances 0 before & after despite amount>0: "
-               f"**{dest_zero:,}** (merchant/mule accounts — expected).\n")
-    log.append(f"- Rows where oldbalanceOrg − amount ≠ newbalanceOrig: "
-               f"**{n_err:,}** — this **balance-error is fraud signal**, kept as a feature.\n")
+    err_dest = df["oldbalanceDest"] + df["amount"] - df["newbalanceDest"]
+    n_err_orig = int((err_orig.abs() > 1e-6).sum())
+    n_err_dest = int((err_dest.abs() > 1e-6).sum())
+    decisions.append("Preserved balance-reconciliation quirks as predictive PaySim signal.")
 
-    # 6) Range validation on synthetic fields --------------------------------
-    checks = {
-        "hour_of_day ∈ 0..23": df["hour_of_day"].between(0, 23).all(),
-        "account_age_days ≥ 1": (df["account_age_days"] >= 1).all(),
-        "num_failed_payment_attempts ≥ 0": (df["num_failed_payment_attempts"] >= 0).all(),
-        "ip_billing_distance_km ≥ 0": (df["ip_billing_distance_km"] >= 0).all(),
-    }
-    log.append("## 6. Range validation (synthetic fields)\n")
-    for k, v in checks.items():
-        log.append(f"- {k}: {'OK ✅' if v else 'FAIL ❌'}\n")
+    synthetic_checks = pd.DataFrame([
+        {"check": "hour_of_day in 0..23", "status": bool(df["hour_of_day"].between(0, 23).all())},
+        {"check": "account_age_days >= 1", "status": bool((df["account_age_days"] >= 1).all())},
+        {"check": "num_failed_payment_attempts >= 0", "status": bool((df["num_failed_payment_attempts"] >= 0).all())},
+        {"check": "ip_billing_distance_km >= 0", "status": bool((df["ip_billing_distance_km"] >= 0).all())},
+    ])
 
-    # ---- save + summary ----
-    after = len(df)
-    log.append("## Summary\n")
-    log.append(f"- Rows before: **{before:,}** → after: **{after:,}** "
-               f"(removed {before-after:,}, {(before-after)/before:.3%}).\n")
-    log.append("- Decisions:\n" + ("".join(f"  - {d}\n" for d in decisions) if decisions
-               else "  - No rows removed; dataset already clean. Added flags: "
-                    "`flag_zero_amount`, `amount_capped`.\n"))
+    missing_after = missing_table(df)
+    after_rows = len(df)
+    after_cols = df.shape[1]
+    after_fraud = int(df["isFraud"].sum())
+    after_rate = float(df["isFraud"].mean())
+
+    before_after = pd.DataFrame([
+        {"metric": "rows", "before": before_rows, "after": after_rows, "change": after_rows - before_rows},
+        {"metric": "columns", "before": before_cols, "after": after_cols, "change": after_cols - before_cols},
+        {"metric": "fraud_rows", "before": before_fraud, "after": after_fraud, "change": after_fraud - before_fraud},
+        {"metric": "fraud_rate", "before": round(before_rate, 8), "after": round(after_rate, 8), "change": round(after_rate - before_rate, 8)},
+        {"metric": "missing_cells", "before": int(missing_before["missing"].sum()), "after": int(missing_after["missing"].sum()), "change": int(missing_after["missing"].sum() - missing_before["missing"].sum())},
+        {"metric": "duplicate_base_rows", "before": n_dup, "after": 0, "change": -n_dup},
+        {"metric": "negative_amount_rows", "before": n_neg, "after": int((df["amount"] < 0).sum()), "change": -n_neg},
+        {"metric": "zero_amount_rows", "before": n_zero, "after": int(df["flag_zero_amount"].sum()), "change": 0},
+        {"metric": "step_outside_1_743", "before": step_invalid, "after": step_invalid, "change": 0},
+    ])
+
+    amount_report = pd.DataFrame([
+        {"metric": "amount_p99", "value": round(amount_p99, 3)},
+        {"metric": "amount_p999", "value": round(amount_p999, 3)},
+        {"metric": "amount_max", "value": round(amount_max, 3)},
+        {"metric": "rows_above_p99", "value": amount_out_p99},
+        {"metric": "rows_above_p999", "value": amount_out_p999},
+    ])
+
+    balance_report = pd.DataFrame([
+        {"check": "destination balances 0 before/after while amount > 0", "rows": dest_zero, "decision": "preserve"},
+        {"check": "origin balance reconciliation error", "rows": n_err_orig, "decision": "preserve"},
+        {"check": "destination balance reconciliation error", "rows": n_err_dest, "decision": "preserve"},
+    ])
+
+    invalid_sections = []
+    for col, table in invalid_category_values.items():
+        invalid_sections.append(f"### `{col}` invalid values\n")
+        if table.empty:
+            invalid_sections.append("No inconsistency found.\n")
+        else:
+            invalid_sections.append(table.to_markdown(index=False) + "\n")
+
+    log = [
+        "# Cleaning Report — PaySim E-Commerce Fraud Detection\n",
+        "## Scope\n",
+        "- Input: `data/processed/transactions_context.parquet`.\n",
+        "- Cleaning is conservative: validate and document, remove only exact duplicates or negative amounts if found.\n",
+        "- PaySim balance-reconciliation quirks are preserved because they are predictive signal.\n",
+        "\n## Before / After Summary\n",
+        before_after.to_markdown(index=False) + "\n",
+        "\n## Missing Values\n",
+        "Before:\n",
+        missing_before.to_markdown(index=False) + "\n",
+        "After:\n",
+        missing_after.to_markdown(index=False) + "\n",
+        "\n## Duplicate Base Transactions\n",
+        f"- Exact duplicates on PaySim base columns: **{n_dup:,}**.\n",
+        "\n## Category Validation\n",
+        "Expected sets:\n",
+        pd.DataFrame([
+            {"column": "type", "valid_values": ", ".join(sorted(VALID_TYPES))},
+            {"column": "browser", "valid_values": ", ".join(_BROWSERS)},
+            {"column": "device_os", "valid_values": ", ".join(_OS)},
+            {"column": "billing_country", "valid_values": ", ".join(_COUNTRIES)},
+        ]).to_markdown(index=False) + "\n",
+        "Before category value-set:\n",
+        category_before.to_markdown(index=False) + "\n",
+        "After category value-set:\n",
+        category_after.to_markdown(index=False) + "\n",
+        *invalid_sections,
+        "\n## Amount / Step Validation\n",
+        f"- Negative amount rows: **{n_neg:,}**.\n",
+        f"- Zero amount rows: **{n_zero:,}**; kept and flagged with `flag_zero_amount`.\n",
+        f"- Rows outside `step` range 1..743: **{step_invalid:,}**.\n",
+        amount_report.to_markdown(index=False) + "\n",
+        "\n## Balance Reconciliation Quirks\n",
+        balance_report.to_markdown(index=False) + "\n",
+        "\n## Synthetic Field Range Validation\n",
+        synthetic_checks.assign(status=synthetic_checks["status"].map({True: "OK", False: "FAIL"})).to_markdown(index=False) + "\n",
+        "\n## Decisions\n",
+        "".join(f"- {d}\n" for d in decisions),
+    ]
 
     out = DATA_PROCESSED / "transactions_clean.parquet"
-    try:
-        df.to_parquet(out, index=False)
-    except Exception:
-        out = out.with_suffix(".csv"); df.to_csv(out, index=False)
+    df.to_parquet(out, index=False)
     (DOCS / "cleaning_report.md").write_text("\n".join(log), encoding="utf-8")
 
-    print(f"[clean] {before:,} -> {after:,} rows")
-    print(f"[clean] duplicates={n_dup:,} neg_amount={n_neg:,} zero_amount={n_zero:,} outliers>{q999:,.0f}={n_out:,}")
-    print(f"[clean] balance-error rows (kept as signal): {n_err:,}")
-    print(f"[clean] wrote cleaned data -> {out.name} ; report -> docs/cleaning_report.md")
+    print(f"[clean] {before_rows:,} -> {after_rows:,} rows")
+    print(f"[clean] fraud_rate {before_rate:.4%} -> {after_rate:.4%}")
+    print(f"[clean] duplicates={n_dup:,} neg_amount={n_neg:,} zero_amount={n_zero:,}")
+    print(f"[clean] amount p99={amount_p99:,.0f} p99.9={amount_p999:,.0f} max={amount_max:,.0f}")
+    print(f"[clean] balance-error rows kept: origin={n_err_orig:,} dest={n_err_dest:,}")
+    print(f"[clean] wrote cleaned data -> {out}")
 
 
 if __name__ == "__main__":
