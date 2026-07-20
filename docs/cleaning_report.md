@@ -11,17 +11,17 @@
 
 ## Before / After Summary
 
-| metric               |          before |           after |   change |
-|:---------------------|----------------:|----------------:|---------:|
-| rows                 | 954393          | 954393          |        0 |
-| columns              |     33          |     35          |        2 |
-| fraud_rows           |   1232          |   1232          |        0 |
-| fraud_rate           |      0.00129087 |      0.00129087 |        0 |
-| missing_cells        |      0          |      0          |        0 |
-| duplicate_base_rows  |      0          |      0          |        0 |
-| negative_amount_rows |      0          |      0          |        0 |
-| zero_amount_rows     |      4          |      4          |        0 |
-| step_outside_1_743   |      0          |      0          |        0 |
+| metric               |         before |          after |   change |
+|:---------------------|---------------:|---------------:|---------:|
+| rows                 |    6.36262e+06 |    6.36262e+06 |        0 |
+| columns              |   33           |   35           |        2 |
+| fraud_rows           | 8213           | 8213           |        0 |
+| fraud_rate           |    0.00129082  |    0.00129082  |        0 |
+| missing_cells        |    0           |    0           |        0 |
+| duplicate_base_rows  |    0           |    0           |        0 |
+| negative_amount_rows |    0           |    0           |        0 |
+| zero_amount_rows     |   16           |   16           |        0 |
+| step_outside_1_743   |    0           |    0           |        0 |
 
 
 ## Missing Values
@@ -160,26 +160,26 @@ No inconsistency found.
 
 - Negative amount rows: **0**.
 
-- Zero amount rows: **4**; kept and flagged with `flag_zero_amount`.
+- Zero amount rows: **16**; kept and flagged with `flag_zero_amount`.
 
 - Rows outside `step` range 1..743: **0**.
 
-| metric          |          value |
-|:----------------|---------------:|
-| amount_p99      |    1.62094e+06 |
-| amount_p999     |    9.33595e+06 |
-| amount_max      |    6.98867e+07 |
-| rows_above_p99  | 9544           |
-| rows_above_p999 |  955           |
+| metric          |           value |
+|:----------------|----------------:|
+| amount_p99      |     1.61598e+06 |
+| amount_p999     |     8.9568e+06  |
+| amount_max      |     9.24455e+07 |
+| rows_above_p99  | 63627           |
+| rows_above_p999 |  6363           |
 
 
 ## Balance Reconciliation Quirks
 
-| check                                                |   rows | decision   |
-|:-----------------------------------------------------|-------:|:-----------|
-| destination balances 0 before/after while amount > 0 | 347652 | preserve   |
-| origin balance reconciliation error                  | 769030 | preserve   |
-| destination balance reconciliation error             | 655282 | preserve   |
+| check                                                |    rows | decision   |
+|:-----------------------------------------------------|--------:|:-----------|
+| destination balances 0 before/after while amount > 0 | 2317276 | preserve   |
+| origin balance reconciliation error                  | 5125552 | preserve   |
+| destination balance reconciliation error             | 4364924 | preserve   |
 
 
 ## Synthetic Field Range Validation

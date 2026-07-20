@@ -9,6 +9,7 @@ import warnings
 import joblib
 import numpy as np
 import pandas as pd
+from sklearn.base import clone
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, precision_recall_fscore_support, roc_auc_score
@@ -287,7 +288,10 @@ def main() -> None:
             X_val = subset_features(X_val_src, group)
             X_test = subset_features(X_test_src, group)
 
-            model = spec["model"]
+            # Clone a fresh, unfitted estimator per (model, feature_group) —
+            # reusing spec["model"] directly would let each group's .fit()
+            # overwrite the previous group's fitted state on the same object.
+            model = clone(spec["model"])
             print(f"[m5] fitting {spec['name']} / {group} ({X_train.shape[1]} features)")
             model.fit(X_train, y_train)
             val_scores = model.predict_proba(X_val)[:, 1]

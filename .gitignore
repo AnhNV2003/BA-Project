@@ -1,6 +1,7 @@
 # =====================================================================
-# HEAVY files -> NOT in git. Regenerate locally with scripts/get_data.sh
-# (see docs/data_setup.md for the full walkthrough).
+# HEAVY dataset files stay OUT of git — regenerate via scripts/get_data.sh
+# or ./train.sh full (see docs/data_setup.md). Model bundles (small, a few
+# hundred KB) ARE committed so the repo is usable right after clone.
 # =====================================================================
 # Raw PaySim dataset (~471MB) — download from Kaggle into data/raw/
 data/raw/*
@@ -9,15 +10,12 @@ data/raw/*
 # Kaggle download archive left in the repo root (~178MB)
 *.zip
 
-# Big processed datasets (regenerate: ./scripts/get_data.sh, or python src/build_dataset.py)
+# Big processed datasets (~550-590MB each) — regenerate: ./scripts/get_data.sh
 data/processed/*.parquet
 
 # Synthetic caches (regenerate on first run) — customer master + stand-in
 data/synthetic/*
 !data/synthetic/.gitkeep
-
-# Trained model bundles (regenerate: python src/train_validate.py / src/features.py)
-models/*.joblib
 
 # Large generated HTML report (~4MB) — regenerate: python monitoring/drift.py
 monitoring/reports/*.html
@@ -25,12 +23,14 @@ monitoring/reports/*.html
 # Runtime logs
 logs/*.log
 train.log
+train_realistic.log
 
 # Unrelated one-off script (different project's dataset download)
 install_kaggle.py
 
 # =====================================================================
 # KEPT in git on purpose (small + useful after clone):
+#   models/*.joblib                     (trained bundle — run infer.py/api right after clone)
 #   data/processed/sample_preview.csv   (Streamlit demo runs without big files)
 #   docs/figures/*.png, docs/*.md, monitoring/reports/*.md
 # =====================================================================

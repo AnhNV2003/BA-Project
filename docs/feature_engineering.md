@@ -2,9 +2,9 @@
 
 ## Source / Split
 
-- Source: `data/processed/transactions_clean.parquet` with **954,393 rows**.
+- Source: `data/processed/transactions_clean.parquet` with **6,362,620 rows**.
 
-- Train/validation/test rows: **668,075 / 143,159 / 143,159**.
+- Train/validation/test rows: **4,453,834 / 954,393 / 954,393**.
 
 - Step windows: train 1..323; validation 323..378; test 378..743.
 
@@ -55,9 +55,9 @@
 
 - Full fraud prevalence: **0.1291%**.
 
-- Train fraud prevalence: **0.0844%**.
+- Train fraud prevalence: **0.0818%**.
 
-- Recommended model weight default: `scale_pos_weight=1183.53` or class weights.
+- Recommended model weight default: `scale_pos_weight=1221.57` or class weights.
 
 - SMOTE/undersampling, if used, must be applied only inside the train fold after transformation.
 
@@ -76,8 +76,8 @@
 
 | split      |   dest_seen_before_rate |   max_dest_txn_count_so_far |
 |:-----------|------------------------:|----------------------------:|
-| validation |                  0.3506 |                          18 |
-| test       |                  0.3393 |                          18 |
+| validation |                  0.5757 |                         109 |
+| test       |                  0.5644 |                         112 |
 
 
 ## Notes
