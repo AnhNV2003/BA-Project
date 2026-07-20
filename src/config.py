@@ -15,6 +15,11 @@ LOGS = ROOT / "logs"
 for folder in (DATA_RAW, DATA_SYNTH, DATA_PROCESSED, FIGURES, MODELS, LOGS):
     folder.mkdir(parents=True, exist_ok=True)
 
+# Real Kaggle PaySim CSV: drop it in data/raw/ under this exact name, or any
+# other *.csv in DATA_RAW / PAYSIM_DIR is auto-discovered as a fallback.
+PAYSIM_DIR = DATA_RAW
+PAYSIM_CSV = DATA_RAW / "PS_20174392719_1491204439457_log.csv"
+
 # ----------------------------------------------------------------------------
 # Reproducibility
 # ----------------------------------------------------------------------------

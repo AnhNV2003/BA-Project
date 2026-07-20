@@ -20,43 +20,46 @@ chặn gian lận và không gây phiền khách hàng hợp lệ?*
   tuổi tài khoản, …), sinh bởi `src/synth_context.py`. Mọi cột được ghi rõ trong
   **`docs/data_dictionary.md`**.
 
-## 📥 Tải dữ liệu từ Google Drive
+## 📥 Lấy dữ liệu
 
-Các file nặng **không** nằm trong git. Tải từ Drive của nhóm rồi đặt đúng thư mục:
-
-**🔗 Link Drive:** https://drive.google.com/drive/folders/1JAhxTGWeXHifeDl3QinpvAfwxxjkF6oR?usp=sharing
-
-| File trên Drive | Cách xử lý | Bắt buộc? |
-|---|---|---|
-| `archive.zip` (178MB) | Giải nén, bỏ `PS_20174392719_1491204439457_log.csv` vào `data/raw/` | ✅ **Bắt buộc** |
-| `transactions_context.parquet` (82MB) | Đặt vào `data/processed/` | Tuỳ chọn (khỏi build lại) |
-| `transactions_clean.parquet` (88MB) | Đặt vào `data/processed/` | Tuỳ chọn |
-
-> Chỉ cần giải nén **`archive.zip`** lấy CSV bỏ vào `data/raw/` là chạy được toàn
-> bộ pipeline — 2 file parquet chỉ để khỏi phải build lại
-> (`python src/build_dataset.py`).
-
-## Cài đặt
+Các file nặng (CSV gốc, parquet đã xử lý, model bundle) **không** commit vào git —
+tự sinh lại ở máy local. Chỉ cần 1 lệnh:
 
 ```bash
 pip install -r requirements.txt
-# sau đó tải CSV PaySim vào data/raw/
+./scripts/get_data.sh          # tải qua Kaggle CLI + build lại toàn bộ (M1->M5)
 ```
+
+Chưa cấu hình Kaggle API token? Xem **[docs/data_setup.md](docs/data_setup.md)**
+để tải tay, dùng bản mẫu nhanh hơn (`./scripts/get_data.sh --sample 0.15`), hoặc
+tái sử dụng artifact đồng đội đã build sẵn thay vì build lại từ đầu.
+
+- **Nguồn nền (bắt buộc):** PaySim — Kaggle `rupakroy/online-payments-fraud-detection-dataset`.
+  6.362.620 dòng, tỉ lệ gian lận **0,129%**, gian lận **chỉ xảy ra ở TRANSFER & CASH_OUT**.
+- **Dữ liệu synthetic (phần mở rộng bắt buộc):** danh tính (Faker) + tín hiệu rủi ro
+  (thiết bị mới, lệch địa chỉ ship/bill, số lần thanh toán fail, khoảng cách IP,
+  tuổi tài khoản, …), sinh bởi `src/synth_context.py`. Mọi cột được ghi rõ trong
+  **`docs/data_dictionary.md`** / **`docs/feature_groups.md`**.
 
 > ⚠️ Thư viện đã cài trong venv `SeminarProject/.venv` (Python 3.14). Nếu VSCode báo
 > "package chưa cài" thì chỉ cần chọn đúng interpreter đó — không phải lỗi.
 
 ## Chạy pipeline (từ thư mục gốc của repo)
 
+Sau khi có CSV trong `data/raw/` (qua `get_data.sh` hoặc tải tay):
+
 | # | Lệnh | Kết quả |
 |---|---|---|
-| 1 | `python src/build_dataset.py` (`--full` cho toàn bộ 6.36M) | `data/processed/transactions_context.parquet` + file preview |
+| 1 | `python src/build_dataset.py --full` | `data/processed/transactions_context.parquet` + file preview |
 | 2 | `python src/eda.py` | `docs/figures/*.png` + `docs/eda_summary.md` |
 | 3 | `python src/cleaning.py` | `data/processed/transactions_clean.parquet` + `docs/cleaning_report.md` |
-| 4 | `python src/train_validate.py` | `models/fraud_model.joblib` + metrics / kiểm tra leakage / threshold |
-| 5 | `uvicorn api.main:app --reload` | API chấm điểm → http://127.0.0.1:8000/docs |
-| 6 | `streamlit run app/streamlit_app.py` | hàng đợi review cho chuyên viên rủi ro |
-| 7 | `python monitoring/drift.py` | `monitoring/reports/drift_report.md` + `evidently_drift.html` |
+| 4 | `python src/features.py` | `models/feature_transformer.joblib` + `docs/feature_engineering.md` |
+| 5 | `python src/train_validate.py` | `models/fraud_model.joblib` + `docs/model_development.md` |
+| 6 | `uvicorn api.main:app --reload` | API chấm điểm → http://127.0.0.1:8000/docs |
+| 7 | `streamlit run app/streamlit_app.py` | hàng đợi review cho chuyên viên rủi ro |
+| 8 | `python monitoring/drift.py` | `monitoring/reports/drift_report.md` + `evidently_drift.html` |
+
+Hoặc chạy chung bước 1-5: `./train.sh full` (toàn bộ 6.36M dòng) / `./train.sh sample 0.15`.
 
 ## Bản đồ Module → file
 
@@ -71,17 +74,20 @@ pip install -r requirements.txt
 | M7 Giám sát | `monitoring/drift.py` |
 | M8 Báo cáo & thuyết trình | _CHƯA LÀM_ |
 
-## Kết quả chính (mẫu phân tầng 15%, giữ prevalence thật 0,129%)
+## Kết quả chính (full data, 6.362.620 dòng, prevalence 0,129%)
 
-- **Mô hình:** XGBoost, **AUC-PR 0,997** (dùng tất cả feature).
-- **Lớp synthetic đã kiểm định — không leakage:** feature synthetic mạnh nhất
-  AUC 0,79; mô hình chỉ-synthetic AUC 0,88 (cao nhưng < 1,0).
-- **Lưu ý:** các feature đối soát số dư của PaySim gần như tất định nên bài toán
-  gốc rất dễ. Có sẵn **kịch bản "realistic"** tuỳ chọn (bỏ các feature đó →
-  `groups="realistic"` trong `features.py`) để có trade-off precision/recall/chi phí
-  thực sự nếu nhóm muốn phân tích sâu hơn.
-- Mọi giả định điều chỉnh được nằm ở `src/config.py` (`SEED`, trọng số chi phí) và
-  `GEN` trong `src/synth_context.py`.
+- **Model deploy được:** XGBoost trên nhóm feature `realistic` (chỉ tín hiệu có ở
+  authorization-time) — test **AUC-PR 0,91**, ROC-AUC 0,999, recall 96,8%, loss
+  avoided 99,8%.
+- **Nhóm leaky (không deploy):** nhóm `base`/`all` đạt AUC-PR≈1,0 vì các cột balance
+  sau giao dịch của PaySim mã hóa nhãn gần tất định. 2 nhóm này bị loại khỏi bundle
+  lưu — xem `docs/feature_groups.md` để biết chính xác cột nào leaky/deploy được,
+  và `docs/model_development.md` / `docs/model_results.csv` để so sánh đầy đủ.
+- Feature lịch sử `nameDest` được tính một lần trên toàn bộ dữ liệu theo thời gian
+  trước khi chia train/val/test để tránh train/serve skew.
+- Trọng số chi phí (`COST_FALSE_NEGATIVE/FALSE_POSITIVE/MANUAL_REVIEW` trong
+  `src/config.py`) là giả định kinh doanh — xem `docs/cost_model_worksheet.md` để
+  suy ra có căn cứ thay vì đặt bừa.
 
 ## Kiến trúc synthetic 3 lớp (để bảo vệ trong báo cáo)
 

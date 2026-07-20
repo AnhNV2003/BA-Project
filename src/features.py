@@ -14,8 +14,7 @@ import pandas as pd
 from sklearn.impute import SimpleImputer
 from sklearn.preprocessing import StandardScaler
 
-from config import DATA_PROCESSED, DOCS, MODELS, SEED
-from synth_context import _BROWSERS, _COUNTRIES, _OS
+from config import DATA_PROCESSED, DOCS, MODELS
 
 
 TARGET = "isFraud"
