@@ -96,3 +96,81 @@ Or run steps 1-5 together: `./train.sh full` (full 6.36M rows) / `./train.sh sam
 - [ ] Full-data build + imbalance experiments (SMOTE vs class weights)
 - [ ] M8 final report + slides
 - [ ] Fill in submission milestone dates
+
+---
+
+## Batch inference — `src/infer.py`
+
+Loads `models/fraud_model.joblib` and scores transactions without retraining.
+
+### Which mode to use
+
+| Input type | Recommended mode |
+|---|---|
+| Parquet / CSV file (full history available) | default — dest-history **enabled** |
+| Real-time single record (no prior context) | `--record` — dest-history **auto-disabled** |
+| Explicit streaming / no-context batch | add `--no-dest-history` |
+
+### Commands
+
+```bash
+# Evaluate on the held-out test split (recommended first check)
+python src/infer.py \
+  --input data/processed/transactions_clean.parquet \
+  --test-only
+
+# Quick sanity check — first N rows of the test split
+python src/infer.py \
+  --input data/processed/transactions_clean.parquet \
+  --test-only --nrows 100000
+
+# Random 5% sample of the full file
+python src/infer.py \
+  --input data/processed/transactions_clean.parquet \
+  --sample-frac 0.05
+
+# Score a CSV and save results
+python src/infer.py \
+  --input data/raw/PS_20174392719_1491204439457_log.csv \
+  --output scored.csv
+
+# Single JSON record (dest-history disabled automatically)
+python src/infer.py --record \
+  '{"step":1,"type":"TRANSFER","amount":181.0,
+    "nameOrig":"C1305486145","oldbalanceOrg":181.0,"newbalanceOrig":0.0,
+    "nameDest":"C553264065","oldbalanceDest":0.0,"newbalanceDest":0.0}'
+
+# Point to a different bundle
+python src/infer.py --input data/processed/transactions_clean.parquet \
+  --model models/fraud_model.joblib
+```
+
+### Log output (stderr)
+
+```
+[infer] bundle: model=XGBClassifier group=realistic threshold=0.3802 features=44
+[infer] train steps [1, 323]  val [323, 378]  test [378, 743]
+[infer] loaded 6,362,620 rows  →  --test-only: 955,744 rows  →  --nrows: 100,000 rows
+[infer] enrichment done  (0.8s)
+[infer] transform done   (0.1s)  shape=(100000, 50)
+[infer] inference done   (0.0s)  total=0.8s  throughput=119,383 rows/s
+--------------------------------------------------
+[eval] rows          : 100,000
+[eval] actual fraud  : 24  (0.0240%)
+[eval] flagged       : 24  (0.0240%)
+[eval] threshold     : 0.3802
+--------------------------------------------------
+[eval] precision     : 1.0000
+[eval] recall        : 1.0000
+[eval] F1            : 1.0000
+[eval] AUC-PR        : 1.0000
+[eval] ROC-AUC       : 1.0000
+--------------------------------------------------
+[eval] expected cost : 72.00
+[eval] loss avoided  : 100.00%
+--------------------------------------------------
+```
+
+Eval metrics are printed automatically when the input contains an `isFraud` column.
+Output columns always include `fraud_score` (raw probability) and `is_fraud_predicted`
+(0/1 at the trained threshold).
