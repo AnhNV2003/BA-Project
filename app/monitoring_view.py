@@ -115,24 +115,24 @@ def _advance_mon(bundle: dict, k: int, scenario: str):
         ss.mon_triggered = sorted(now_triggered)
 
 
-def _render_bell(names: list[str]):
+def _render_bell(names: list[str], latest_psi: dict | None = None):
+    """Clickable alert bell: a popover showing the drifting signals. The label
+    carries a count badge so the alert state is visible without opening it."""
     count = len(names)
-    if count:
-        tip = "Retrain needed — drift on: " + ", ".join(names)
-        html = f"""<div title="{tip}" style="position:fixed; top:3.4rem; right:1.2rem;
-            z-index:1000; font-size:1.7rem; line-height:1;">🔔<span style="position:absolute;
-            top:-6px; right:-10px; background:#E5484D; color:#fff; font-size:.7rem;
-            font-weight:700; padding:1px 6px; border-radius:10px;">{count}</span></div>"""
-    else:
-        html = """<div title="No drift alerts" style="position:fixed; top:3.4rem; right:1.2rem;
-            z-index:1000; font-size:1.7rem; line-height:1; opacity:.4;">🔔</div>"""
-    st.markdown(html, unsafe_allow_html=True)
+    label = f"🔔 {count}" if count else "🔔"
+    with st.popover(label, use_container_width=True, help="Drift / retrain alerts"):
+        if count:
+            st.markdown(f"**⚠️ Retrain recommended** — {count} signal(s) at PSI ≥ {drift.RETRAIN_PSI}:")
+            for n in names:
+                v = (latest_psi or {}).get(n)
+                st.markdown(f"- `{n}`" + (f" — PSI **{v:.3f}**" if isinstance(v, (int, float)) else ""))
+        else:
+            st.success("No drift alerts — all signals below threshold.")
 
 
 def _render_dashboard(bundle: dict):
     ss = st.session_state
     triggered = list(ss.mon_triggered)
-    _render_bell(triggered)
 
     c1, c2, c3 = st.columns(3)
     c1.metric("Transactions", f"{ss.mon_received:,}")
@@ -171,14 +171,21 @@ def _render_live_monitor():
     bundle = get_ensemble()
     _ensure_mon_state()
 
-    c1, c2, c3, c4, c5 = st.columns([1, 2, 2, 2, 1])
-    running = c1.toggle("▶ Run", key="mon_running")
-    c2.selectbox("Scenario", SCENARIOS, key="mon_scenario")
-    interval = c3.select_slider("Interval (s)", options=[0.5, 1.0, 2.0, 3.0], value=1.0, key="mon_interval")
-    c4.slider("Txns / tick", 10, 60, 30, step=10, key="mon_per_tick")
-    if c5.button("Reset", key="mon_reset"):
+    cols = st.columns([1, 2, 2, 2, 1, 1.3], vertical_alignment="bottom")
+    running = cols[0].toggle("▶ Run", key="mon_running")
+    cols[1].selectbox("Scenario", SCENARIOS, key="mon_scenario")
+    interval = cols[2].select_slider("Interval (s)", options=[0.5, 1.0, 2.0, 3.0], value=1.0, key="mon_interval")
+    cols[3].slider("Txns / tick", 10, 60, 30, step=10, key="mon_per_tick")
+    if cols[4].button("Reset", key="mon_reset"):
         _reset_mon()
         st.rerun()
+    with cols[5]:
+        # Clickable alert bell, rendered outside the auto-refresh fragment so
+        # opening it isn't torn down each tick. Count reflects the last full run;
+        # live notifications also arrive via st.toast, and the "Signals in drift"
+        # metric below updates every tick.
+        latest = st.session_state.mon_psi_history[-1] if st.session_state.mon_psi_history else {}
+        _render_bell(list(st.session_state.mon_triggered), latest)
 
     run_every = interval if running else None
 
