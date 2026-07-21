@@ -54,6 +54,8 @@ def test_monitoring_live_dashboard_renders():
     body = (
         "import streamlit as st\n"
         "from simulate import generate_pool\n"
+        "from app_common import get_ensemble\n"
+        "b = get_ensemble()\n"
         "pool = generate_pool(n=700, seed=5)\n"
         "st.session_state['mon_baseline'] = pool.iloc[:300].copy()\n"
         "st.session_state['mon_stream'] = pool.iloc[:600].reset_index(drop=True)\n"
@@ -65,6 +67,13 @@ def test_monitoring_live_dashboard_renders():
         "st.session_state['mon_perf_history'] = ["
         "{'n': 300, 'precision': 0.4, 'recall': 0.9, 'f1': 0.55, 'flagged_rate': 0.02}]\n"
         "st.session_state['mon_triggered'] = ['ip_billing_distance_km', 'PREDICTION_SCORE_xgb']\n"
+        "st.session_state['mon_test_set'] = pool.iloc[:250].copy()\n"
+        "st.session_state['mon_bundle'] = b\n"
+        "st.session_state['mon_versions'] = ["
+        "{'version': 1, 'bundle': b, 'when': 'deployed', 'scenario': '—', 'rows': None, "
+        "'fraud': None, 'triggers': [], 'metrics': None},"
+        "{'version': 2, 'bundle': b, 'when': '12:00:00', 'scenario': 'Sudden spike', 'rows': 15000, "
+        "'fraud': 22, 'triggers': ['x'], 'metrics': None}]\n"
         "import monitoring_view; monitoring_view.render()\n"
     )
     at = _run(body)

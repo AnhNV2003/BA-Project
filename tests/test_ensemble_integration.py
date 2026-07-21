@@ -82,6 +82,13 @@ def test_window_performance(bundle):
     assert 0.0 <= perf["flagged_rate"] <= 1.0
 
 
+def test_evaluate_on(bundle):
+    from simulate import generate_pool, evaluate_on
+    m = evaluate_on(bundle, generate_pool(n=800, seed=6))
+    assert {"precision", "recall", "f1", "flagged_rate"} <= set(m)
+    assert 0.0 <= m["precision"] <= 1.0
+
+
 def test_retrain_ensemble_shape_and_scorable(bundle):
     import pandas as pd
     from simulate import generate_pool, apply_scenario

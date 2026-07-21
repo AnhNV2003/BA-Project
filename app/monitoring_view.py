@@ -20,12 +20,16 @@ import streamlit.components.v1 as components
 
 import drift
 from app_common import get_ensemble, model_keys
-from simulate import SCENARIOS, apply_scenario, generate_pool, score_stream, scenario_intensity, DEFAULT_POOL_SIZE
+from simulate import (SCENARIOS, apply_scenario, evaluate_on, generate_pool, score_stream,
+                      scenario_intensity, DEFAULT_POOL_SIZE)
 from ensemble import window_performance
 from retrain import retrain_ensemble
 from alerting import build_alert_payload, incident_report_md, send_webhook
 
-_RETRAIN_SAMPLE_N = 15000   # labelled rows generated for an in-app retrain
+_RETRAIN_SAMPLE_N = 60000   # labelled rows for an in-app retrain — large enough
+                            # to carry ~90 fraud (fewer starves the refit and it
+                            # regresses vs the deployed model)
+_TEST_N = 4000              # frozen held-out test set for version comparison
 _PERF_COLORS = ["#2E7D32", "#1565C0", "#8E24AA", "#EF6C00"]  # precision/recall/f1/flagged
 
 _BAND_COLORS = {"stable": "#e8f5e9", "moderate": "#fff8e1", "SIGNIFICANT": "#ffebee"}
@@ -78,11 +82,14 @@ def _ensure_mon_state():
     ss.setdefault("mon_perf_history", [])
     ss.setdefault("mon_triggered", [])
     ss.setdefault("mon_bundle", None)     # in-session retrained bundle override
+    ss.setdefault("mon_versions", [])     # model version registry (audit log)
+    ss.setdefault("mon_test_set", None)   # frozen labelled test set for comparison
 
 
 def _reset_mon():
     for k in ("mon_stream", "mon_baseline", "mon_received", "mon_pool", "mon_cursor",
-              "mon_gen", "mon_psi_history", "mon_perf_history", "mon_triggered", "mon_bundle"):
+              "mon_gen", "mon_psi_history", "mon_perf_history", "mon_triggered", "mon_bundle",
+              "mon_versions", "mon_test_set"):
         st.session_state.pop(k, None)
     _ensure_mon_state()
 
@@ -151,23 +158,49 @@ def _maybe_send_alert(new_signals, psi):
         st.toast(("📤 Alert sent" if ok else f"⚠️ Alert failed — {msg}"), icon="📤" if ok else "⚠️")
 
 
-def _do_retrain(scenario: str):
-    """Refit the models on freshly-generated current-distribution data, adopt the
-    current window as the new baseline, and reset the charts so drift + performance
-    recover under the (now-adapted) model."""
+def _register_deployed_version():
+    """Lazily record the deployed model as version 1 (audit log anchor)."""
     ss = st.session_state
+    if not ss.mon_versions:
+        ss.mon_versions.append({
+            "version": 1, "bundle": get_ensemble(), "when": "deployed",
+            "scenario": "—", "rows": None, "fraud": None, "triggers": [], "metrics": None,
+        })
+
+
+def _do_retrain(scenario: str):
+    """Refit the models on freshly-generated current-distribution data, register a
+    new model version, freeze a held-out test set for evidence, adopt the current
+    window as the new baseline, and reset the charts so drift + performance recover."""
+    ss = st.session_state
+    _register_deployed_version()
     base = _active_bundle()
     intensity = scenario_intensity(scenario, ss.mon_received, BASELINE_N, RAMP)
     with st.spinner(f"Retraining 3 models on {_RETRAIN_SAMPLE_N:,} current-distribution transactions…"):
-        sample = generate_pool(_RETRAIN_SAMPLE_N, seed=_SEED_BASE + 999)
-        sample = apply_scenario(sample, scenario, intensity, np.random.default_rng(_SEED_BASE + 999))
-        ss.mon_bundle = retrain_ensemble(base, sample, seed=7)
+        sample = apply_scenario(generate_pool(_RETRAIN_SAMPLE_N, seed=_SEED_BASE + 999),
+                                scenario, intensity, np.random.default_rng(_SEED_BASE + 999))
+        new_bundle = retrain_ensemble(base, sample, seed=7)
+    ss.mon_bundle = new_bundle
+
+    # Freeze a held-out test set (current distribution) the first time we retrain,
+    # so every version is judged on identical data. Different seed from training.
+    if ss.mon_test_set is None:
+        ss.mon_test_set = apply_scenario(generate_pool(_TEST_N, seed=_SEED_BASE + 321),
+                                         scenario, intensity, np.random.default_rng(_SEED_BASE + 321))
+
+    ss.mon_versions.append({
+        "version": len(ss.mon_versions) + 1, "bundle": new_bundle,
+        "when": datetime.now().strftime("%H:%M:%S"), "scenario": scenario,
+        "rows": new_bundle["retrain_rows"], "fraud": new_bundle["retrain_fraud"],
+        "triggers": list(ss.mon_triggered), "metrics": None,
+    })
+
     # adopt the current (drifted) window as the new normal so ongoing traffic matches
     if ss.mon_stream is not None and len(ss.mon_stream):
         ss.mon_baseline = ss.mon_stream.iloc[-WINDOW_N:].copy()
     ss.mon_psi_history, ss.mon_perf_history, ss.mon_triggered = [], [], []
-    st.toast(f"✅ Retrained on {ss.mon_bundle['retrain_rows']:,} rows "
-             f"({ss.mon_bundle['retrain_fraud']} fraud) — baseline reset.", icon="✅")
+    st.toast(f"✅ Retrained → Model v{ss.mon_versions[-1]['version']} "
+             f"({new_bundle['retrain_rows']:,} rows) — baseline reset.", icon="✅")
 
 
 def _render_bell(names: list[str], latest_psi: dict | None = None):
@@ -267,6 +300,67 @@ def _distribution_chart(dist: pd.DataFrame) -> "alt.Chart":
     )
 
 
+def _render_version_badge():
+    """Prominent banner naming the model version currently being served."""
+    ss = st.session_state
+    if ss.get("mon_bundle") and ss.mon_versions:
+        v = ss.mon_versions[-1]
+        st.success(f"🟢 Serving **Model v{v['version']}** · retrained **{v['when']}** · "
+                   f"{v['rows']:,} rows ({v['fraud']} fraud) · scenario: *{v['scenario']}* "
+                   "— press **Reset** to restore the deployed model.")
+    else:
+        st.info("⚪ Serving **Model v1 (deployed)** — the on-disk ensemble bundle.")
+
+
+def _version_table_row(v: dict, test_set) -> dict:
+    if v.get("metrics") is None:
+        v["metrics"] = evaluate_on(v["bundle"], test_set)   # cache: test set is frozen
+    m = v["metrics"]
+    return {
+        "model": f"v{v['version']}", "when": v["when"], "scenario": v["scenario"],
+        "train_rows": v["rows"], "train_fraud": v["fraud"],
+        "precision": m.get("precision"), "recall": m.get("recall"),
+        "f1": m.get("f1"), "auc_pr": m.get("auc_pr"),
+    }
+
+
+def _render_version_history():
+    ss = st.session_state
+    n = len(ss.mon_versions)
+    with st.expander(f"🗒️ Retrain history & version performance ({n} version{'s' if n != 1 else ''})",
+                     expanded=bool(ss.get("mon_bundle"))):
+        if ss.mon_test_set is None or n == 0:
+            st.caption("Retrain at least once to register versions and generate a fixed test set "
+                       "for an apples-to-apples comparison.")
+            return
+        rows = [_version_table_row(v, ss.mon_test_set) for v in ss.mon_versions]
+        table = pd.DataFrame(rows)
+        st.caption(f"All versions evaluated on the **same frozen test set** "
+                   f"({len(ss.mon_test_set):,} transactions, current distribution). "
+                   "Higher precision/F1/AUC-PR after retrain = evidence the retrain helped.")
+        st.dataframe(
+            table.style.format({"precision": "{:.3f}", "recall": "{:.3f}",
+                                "f1": "{:.3f}", "auc_pr": "{:.3f}",
+                                "train_rows": "{:,.0f}", "train_fraud": "{:,.0f}"}),
+            use_container_width=True, hide_index=True,
+        )
+        # grouped bar chart: metric value per version
+        melt = table.melt(id_vars="model", value_vars=["precision", "f1", "auc_pr"],
+                          var_name="metric", value_name="value").dropna()
+        if len(melt):
+            chart = (
+                alt.Chart(melt, height=240).mark_bar()
+                .encode(
+                    x=alt.X("metric:N", title=None, axis=alt.Axis(labelAngle=0)),
+                    xOffset=alt.XOffset("model:N"),
+                    y=alt.Y("value:Q", title="score on frozen test set"),
+                    color=alt.Color("model:N", title="version"),
+                    tooltip=["model", "metric", alt.Tooltip("value:Q", format=".3f")],
+                )
+            )
+            st.altair_chart(chart, use_container_width=True)
+
+
 def _render_alerting_panel():
     ss = st.session_state
     with st.expander("🔔 Alerting (webhook / report)", expanded=False):
@@ -293,6 +387,8 @@ def _render_live_monitor():
     _ensure_mon_state()
     bundle = _active_bundle()
 
+    _render_version_badge()
+
     cols = st.columns([1, 2, 1.6, 1.6, 1, 1.2], vertical_alignment="bottom")
     running = cols[0].toggle("▶ Run", key="mon_running")
     cols[1].selectbox("Scenario", SCENARIOS, key="mon_scenario")
@@ -315,9 +411,8 @@ def _render_live_monitor():
         _do_retrain(st.session_state.mon_scenario)
         st.rerun()
     with act2:
-        if st.session_state.get("mon_bundle"):
-            st.caption("🟢 Serving an **in-session retrained** model. Reset to restore the deployed bundle.")
         _render_alerting_panel()
+    _render_version_history()
 
     run_every = interval if running else None
 

@@ -12,7 +12,7 @@ import pandas as pd
 from data_base import make_standin
 from synth_context import add_synthetic_context
 from infer import enrich
-from ensemble import score_batch
+from ensemble import score_batch, window_performance
 
 # Fresh transactions are generated a pool at a time (realistic ~0.15% fraud
 # rate); the page streams K rows per tick and regenerates a new pool — with a
@@ -93,3 +93,9 @@ def score_stream(raw_df: pd.DataFrame, bundle: dict) -> pd.DataFrame:
     enriched = enrich(raw_df, use_dest_history=False)
     scores = score_batch(enriched, bundle).reset_index(drop=True)
     return pd.concat([raw_df.reset_index(drop=True), scores], axis=1)
+
+
+def evaluate_on(bundle: dict, raw_df: pd.DataFrame) -> dict:
+    """Classification performance of a bundle on a labelled test set — used to
+    compare model versions on identical data."""
+    return window_performance(score_stream(raw_df, bundle))
