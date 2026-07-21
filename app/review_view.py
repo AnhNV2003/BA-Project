@@ -4,9 +4,10 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from app_common import DATA_PROCESSED, get_ensemble, model_keys
+from app_common import DATA_PROCESSED, dataset_badge, get_ensemble, model_keys
 from ensemble import score_batch
 from infer import enrich
+from reasons import reason_series
 
 _DECISION_COLORS = {"allow": "#e8f5e9", "review": "#fff8e1", "block": "#ffebee"}
 
@@ -21,6 +22,9 @@ def _load_and_score():
     scores = score_batch(enriched, bundle).reset_index(drop=True)
     df = pd.concat([df.reset_index(drop=True), scores], axis=1)
     df["max_score"] = df[[f"{k}_score" for k in keys]].max(axis=1)
+    # Transparent "why flagged" signals — computed on the enriched frame so
+    # engineered features (ip distance, night, account age) are available.
+    df["why_flagged"] = reason_series(enriched.reset_index(drop=True))
     return df, keys
 
 
@@ -37,6 +41,7 @@ def render():
         "Models: **" + "**, **".join(bundle["models"][k]["model_name"] for k in keys)
         + "** · decision = **max-risk** aggregate (block > review > allow)"
     )
+    dataset_badge("sample")
 
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Transactions", f"{len(df):,}")
@@ -63,9 +68,10 @@ def render():
     )
 
     score_cols = [f"{k}_score" for k in keys]
-    cols = ["agg_decision", *score_cols, "type", "amount", "account_age_days",
+    cols = ["agg_decision", "why_flagged", *score_cols, "type", "amount", "account_age_days",
             "is_new_device", "shipping_billing_mismatch", "num_failed_payment_attempts",
             "ip_billing_distance_km", "high_risk_country", "hour_of_day", "isFraud"]
+    cols = [c for c in cols if c in view.columns]
 
     st.subheader(f"Queue — {len(view):,} transactions")
     styler = (
@@ -75,6 +81,12 @@ def render():
         .map(_color_decision, subset=["agg_decision"])
         .background_gradient(subset=score_cols, cmap="Reds", vmin=0, vmax=1)
     )
-    st.dataframe(styler, use_container_width=True, height=520)
-    st.caption("Per-model scores shown side by side; `agg_decision` is the max-risk "
-               "verdict. `isFraud` is for demo evaluation only — unavailable at scoring time.")
+    st.dataframe(
+        styler, use_container_width=True, height=520,
+        column_config={"why_flagged": st.column_config.TextColumn(
+            "why flagged", width="large",
+            help="Transparent risk signals present on the transaction (rule-based reason codes).")},
+    )
+    st.caption("`why flagged` lists the concrete risk signals an analyst would act on; per-model "
+               "scores are shown side by side and `agg_decision` is the max-risk verdict. "
+               "`isFraud` is for demo evaluation only — unavailable at scoring time.")

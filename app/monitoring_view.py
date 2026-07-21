@@ -282,10 +282,8 @@ def _render_dashboard(bundle: dict):
     ss = st.session_state
     triggered = list(ss.mon_triggered)
 
-    c1, c2, c3 = st.columns(3)
+    c1, c3 = st.columns(2)
     c1.metric("Transactions", f"{ss.mon_received:,}")
-    c2.metric("Baseline", f"{BASELINE_N} (frozen)" if ss.mon_baseline is not None
-              else f"building {min(ss.mon_received, BASELINE_N)}/{BASELINE_N}")
     c3.metric("Signals in drift", len(triggered),
               delta="RETRAIN" if triggered else None, delta_color="inverse")
 

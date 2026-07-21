@@ -1,4 +1,4 @@
-# Monitoring — Drift Report (draft)
+# Monitoring - Drift Report (draft)
 
 Reference: day ≤ 15 (51,670 rows) · Current: day > 15 (48,330 rows)
 

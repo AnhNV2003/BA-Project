@@ -7,7 +7,7 @@ from __future__ import annotations
 import pandas as pd
 import streamlit as st
 
-from app_common import get_ensemble, model_keys
+from app_common import dataset_badge, get_ensemble, model_keys
 from simulate import DEFAULT_POOL_SIZE, decision_timeline, generate_pool, score_stream
 
 _MAX_KEEP = 5000            # cap accumulated rows to bound memory
@@ -134,6 +134,7 @@ def render():
         + "**, **".join(bundle["models"][k]["model_name"] for k in model_keys(bundle))
         + "** (dest-history disabled, like real-time). Decision = max-risk aggregate."
     )
+    dataset_badge("live")
 
     # Auto-rerun this fragment every `interval` seconds while running; None pauses it.
     run_every = interval if running else None
