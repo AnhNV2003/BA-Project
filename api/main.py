@@ -1,7 +1,8 @@
-"""Real-time scoring API (Module 6, draft) — FastAPI.
+"""Real-time scoring API (Module 6) — FastAPI.
 
-Loads the trained model and scores a single transaction, returning a fraud
-probability and an allow / review / block decision.
+Scores a single transaction with ALL deployed models (Logistic Regression,
+Random Forest, XGBoost) independently and returns each model's fraud probability
+and allow / review / block decision, plus a combined `max-risk` aggregate verdict.
 
 Run locally:
     uvicorn api.main:app --reload
@@ -12,22 +13,24 @@ from __future__ import annotations
 import pathlib
 import sys
 
-import joblib
 import pandas as pd
 from fastapi import FastAPI
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 SRC = pathlib.Path(__file__).resolve().parents[1] / "src"
 sys.path.insert(0, str(SRC))
-from features import build_features            # noqa: E402
-from config import MODELS                      # noqa: E402
+from infer import enrich, _ensure_required_columns   # noqa: E402
+from ensemble import load_ensemble, score_record      # noqa: E402
+from config import MODELS                              # noqa: E402
 
-BUNDLE = joblib.load(MODELS / "fraud_model.joblib")
-MODEL, FEATURES, THRESHOLD = BUNDLE["model"], BUNDLE["features"], float(BUNDLE["threshold"])
-BLOCK_THRESHOLD = float(max(0.9, THRESHOLD))   # high-confidence auto-block
+ENSEMBLE = load_ensemble(MODELS / "fraud_ensemble.joblib")
+MODEL_NAMES = {k: v["model_name"] for k, v in ENSEMBLE["models"].items()}
 
-app = FastAPI(title="E-Commerce Fraud Scoring API",
-              description=f"Model: {BUNDLE['model_name']} | review threshold: {THRESHOLD:.3f}")
+app = FastAPI(
+    title="E-Commerce Fraud Scoring API",
+    description="Scores each transaction with " + ", ".join(MODEL_NAMES.values())
+    + " independently, plus a max-risk aggregate verdict.",
+)
 
 
 class Transaction(BaseModel):
@@ -53,27 +56,22 @@ class Transaction(BaseModel):
     account_txn_total: int = 1
 
 
-def decide(score: float) -> str:
-    if score >= BLOCK_THRESHOLD:
-        return "block"
-    if score >= THRESHOLD:
-        return "review"
-    return "allow"
-
-
 @app.get("/")
 def health():
-    return {"status": "ok", "model": BUNDLE["model_name"], "threshold": THRESHOLD}
+    return {
+        "status": "ok",
+        "models": MODEL_NAMES,
+        "aggregate_rule": ENSEMBLE.get("rule", "max-risk"),
+    }
 
 
 @app.post("/score")
 def score(txn: Transaction):
-    row = pd.DataFrame([txn.model_dump()])
-    X = build_features(row)[FEATURES].astype(float)
-    prob = float(MODEL.predict_proba(X)[:, 1][0])
-    return {
-        "fraud_probability": round(prob, 4),
-        "decision": decide(prob),
-        "review_threshold": THRESHOLD,
-        "block_threshold": BLOCK_THRESHOLD,
-    }
+    # Real-time single record: no transaction history is available, so
+    # dest-history features are disabled (zero-filled), exactly as infer.py does
+    # for streaming records. Enrichment happens once; each model then transforms
+    # + scores independently inside score_record, which also computes the
+    # max-risk aggregate and isolates any single model failure.
+    row = _ensure_required_columns(pd.DataFrame([txn.model_dump()]))
+    enriched = enrich(row, use_dest_history=False)
+    return score_record(enriched, ENSEMBLE)
