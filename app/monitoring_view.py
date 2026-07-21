@@ -209,12 +209,16 @@ def _do_retrain(scenario: str):
         "triggers": list(ss.mon_triggered), "metrics": None,
     })
 
-    # adopt the current (drifted) window as the new normal so ongoing traffic matches
-    if ss.mon_stream is not None and len(ss.mon_stream):
-        ss.mon_baseline = ss.mon_stream.iloc[-WINDOW_N:].copy()
+    # Reset the live stream so a FRESH baseline is captured and the scenarios can
+    # drift (and alert) again — now scored by the retrained model. The retrained
+    # bundle, version registry and frozen test set are preserved.
+    for k in ("mon_stream", "mon_baseline", "mon_received", "mon_pool", "mon_cursor", "mon_gen"):
+        ss.pop(k, None)
     ss.mon_psi_history, ss.mon_perf_history, ss.mon_triggered = [], [], []
+    _ensure_mon_state()
     st.toast(f"✅ Retrained → Model v{ss.mon_versions[-1]['version']} "
-             f"({new_bundle['retrain_rows']:,} rows) — baseline reset.", icon="✅")
+             f"({new_bundle['retrain_rows']:,} rows). Monitor reset — run a scenario to test v"
+             f"{ss.mon_versions[-1]['version']} against fresh drift.", icon="✅")
 
 
 def _render_bell(names: list[str], latest_psi: dict | None = None):
