@@ -53,6 +53,25 @@ def test_live_feed_renders():
     assert not at.exception, at.exception
 
 
+def test_live_feed_with_data_renders_timeline():
+    # Seed a scored stream so the full render path runs (cumulative chart,
+    # review/block timeline bar_chart, and the table styler).
+    body = (
+        "import pandas as pd, streamlit as st\n"
+        "from app_common import get_ensemble\n"
+        "from simulate import generate_pool, score_stream\n"
+        "b = get_ensemble()\n"
+        "s = score_stream(generate_pool(n=120, seed=9).iloc[:60], b)\n"
+        "s.insert(0, 'arrival', range(1, len(s) + 1))\n"
+        "st.session_state['live_stream'] = s\n"
+        "st.session_state['live_received'] = len(s)\n"
+        "st.session_state['live_history'] = [(1, len(s))]\n"
+        "import live_view; live_view.render()\n"
+    )
+    at = _run(body)
+    assert not at.exception, at.exception
+
+
 def test_entrypoint_navigation_runs():
     # Runs the real entrypoint through st.navigation (both pages registered),
     # which catches wiring errors like duplicate page url_paths.

@@ -8,11 +8,13 @@ import pandas as pd
 import streamlit as st
 
 from app_common import get_ensemble, model_keys
-from simulate import DEFAULT_POOL_SIZE, generate_pool, score_stream
+from simulate import DEFAULT_POOL_SIZE, decision_timeline, generate_pool, score_stream
 
 _MAX_KEEP = 5000            # cap accumulated rows to bound memory
 _SEED_BASE = 20240          # varied per pool regeneration for fresh data
 _DECISION_COLORS = {"allow": "#e8f5e9", "review": "#fff8e1", "block": "#ffebee"}
+_REVIEW_COLOR = "#F6C445"   # yellow — review
+_BLOCK_COLOR = "#E5484D"    # red — block
 
 
 def _ensure_state():
@@ -78,11 +80,23 @@ def _render(bundle: dict):
 
     if ss.live_history:
         hist = pd.DataFrame(ss.live_history, columns=["tick", "received"]).set_index("tick")
-        st.line_chart(hist, height=180)
+        st.caption("Cumulative transactions received")
+        st.line_chart(hist, height=160)
 
     if stream is None or not len(stream):
         st.info("Press **▶ Run** to start the incoming transaction stream.")
         return
+
+    # Timeline of flagged transactions over time: review (yellow) + block (red),
+    # stacked per arrival bucket.
+    bin_size = st.slider("Timeline bucket (transactions)", 5, 100, 25, step=5, key="live_bin")
+    timeline = decision_timeline(stream, bin_size)
+    st.caption("Flagged transactions over time — **review** (yellow) · **block** (red)")
+    st.bar_chart(
+        timeline, height=220,
+        color=[_REVIEW_COLOR, _BLOCK_COLOR],   # column order: ['review', 'block']
+        x_label="arrival (transaction #)", y_label="flagged count",
+    )
 
     only_flagged = st.checkbox("Only flagged (review/block)", value=False, key="live_only_flagged")
     view = stream[stream.agg_decision != "allow"] if only_flagged else stream

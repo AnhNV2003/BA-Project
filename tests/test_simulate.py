@@ -7,7 +7,27 @@ import pytest
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from simulate import generate_pool, score_stream  # noqa: E402
+import pandas as pd  # noqa: E402
+
+from simulate import decision_timeline, generate_pool, score_stream  # noqa: E402
+
+
+def test_decision_timeline_buckets_and_colors_columns():
+    df = pd.DataFrame({
+        "arrival": list(range(1, 21)),
+        "agg_decision": (["allow"] * 8 + ["review"] * 2)     # bucket 1..10
+                        + (["allow"] * 7 + ["block"] * 2 + ["review"]),  # bucket 11..20
+    })
+    tl = decision_timeline(df, bin_size=10)
+    assert list(tl.columns) == ["review", "block"]   # order matters for chart colors
+    assert tl.loc[1, "review"] == 2 and tl.loc[1, "block"] == 0
+    assert tl.loc[11, "block"] == 2 and tl.loc[11, "review"] == 1
+
+
+def test_decision_timeline_empty():
+    tl = decision_timeline(pd.DataFrame(columns=["arrival", "agg_decision"]))
+    assert list(tl.columns) == ["review", "block"]
+    assert len(tl) == 0
 
 BUNDLE_PATH = ROOT / "models" / "fraud_ensemble.joblib"
 
