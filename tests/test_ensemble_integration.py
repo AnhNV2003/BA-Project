@@ -72,6 +72,39 @@ def test_record_and_batch_paths_agree(bundle):
             assert entry["decision"] == batch.iloc[i][f"{key}_decision"]
 
 
+def test_window_performance(bundle):
+    from simulate import generate_pool, score_stream
+    from ensemble import window_performance
+    scored = score_stream(generate_pool(n=1000, seed=3), bundle)
+    perf = window_performance(scored)
+    assert {"precision", "recall", "f1", "flagged_rate", "n_fraud"} <= set(perf)
+    assert 0.0 <= perf["precision"] <= 1.0
+    assert 0.0 <= perf["flagged_rate"] <= 1.0
+
+
+def test_retrain_ensemble_shape_and_scorable(bundle):
+    import pandas as pd
+    from simulate import generate_pool, apply_scenario
+    from retrain import retrain_ensemble
+    from ensemble import score_record
+    from infer import enrich, _ensure_required_columns
+    import numpy as np
+
+    sample = apply_scenario(generate_pool(n=3000, seed=4), "Sudden spike", 1.0, np.random.default_rng(0))
+    nb = retrain_ensemble(bundle, sample, seed=1)
+    assert set(nb["models"]) == set(bundle["models"])
+    assert nb["retrained"] is True and nb["retrain_rows"] == 3000
+    for key, entry in nb["models"].items():
+        assert 0.0 <= entry["threshold"] <= 1.0
+        assert entry["features"] == bundle["models"][key]["features"]   # same feature contract
+
+    # the retrained bundle scores through the same path as the deployed one
+    rec = enrich(_ensure_required_columns(pd.DataFrame([_record()])), use_dest_history=False)
+    out = score_record(rec, nb)
+    assert set(out["models"]) == set(bundle["models"])
+    assert out["aggregate"]["decision"] in {"allow", "review", "block"}
+
+
 def test_per_model_drift_rows_and_trigger():
     from drift import load, split_reference_current, inject_drift, psi_map, RETRAIN_PSI
 

@@ -99,6 +99,34 @@ def score_batch(enriched_df: pd.DataFrame, bundle: dict, block_floor: float = DE
     return out
 
 
+def window_performance(scored_df: pd.DataFrame) -> dict:
+    """Classification performance of the aggregate decision over a labelled
+    window. `scored_df` must have `isFraud`, `agg_decision`, and per-model
+    `*_score` columns (as produced by score_batch / score_stream).
+
+    Positive = flagged (review or block). AUC-PR uses the ensemble risk score
+    (max across models). Returns {} if there is nothing to score.
+    """
+    from sklearn.metrics import average_precision_score, precision_recall_fscore_support
+
+    if scored_df is None or len(scored_df) == 0 or "isFraud" not in scored_df:
+        return {}
+    y = scored_df["isFraud"].to_numpy().astype(int)
+    pred = (scored_df["agg_decision"].to_numpy() != "allow").astype(int)
+    score_cols = [c for c in scored_df.columns if c.endswith("_score")]
+    risk = scored_df[score_cols].max(axis=1).to_numpy() if score_cols else pred.astype(float)
+    p, r, f1, _ = precision_recall_fscore_support(y, pred, average="binary", zero_division=0)
+    aucpr = float(average_precision_score(y, risk)) if len(np.unique(y)) > 1 else None
+    return {
+        "precision": round(float(p), 3),
+        "recall": round(float(r), 3),
+        "f1": round(float(f1), 3),
+        "flagged_rate": round(float(pred.mean()), 3),
+        "auc_pr": round(aucpr, 3) if aucpr is not None else None,
+        "n_fraud": int(y.sum()),
+    }
+
+
 def score_record(enriched_df: pd.DataFrame, bundle: dict, block_floor: float = DEFAULT_BLOCK_FLOOR) -> dict:
     """Score a single enriched record and return the API payload.
 

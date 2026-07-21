@@ -20,7 +20,13 @@ import streamlit.components.v1 as components
 
 import drift
 from app_common import get_ensemble, model_keys
-from simulate import SCENARIOS, apply_scenario, generate_pool, scenario_intensity, DEFAULT_POOL_SIZE
+from simulate import SCENARIOS, apply_scenario, generate_pool, score_stream, scenario_intensity, DEFAULT_POOL_SIZE
+from ensemble import window_performance
+from retrain import retrain_ensemble
+from alerting import build_alert_payload, incident_report_md, send_webhook
+
+_RETRAIN_SAMPLE_N = 15000   # labelled rows generated for an in-app retrain
+_PERF_COLORS = ["#2E7D32", "#1565C0", "#8E24AA", "#EF6C00"]  # precision/recall/f1/flagged
 
 _BAND_COLORS = {"stable": "#e8f5e9", "moderate": "#fff8e1", "SIGNIFICANT": "#ffebee"}
 _REPORT_MD = drift.REPORTS / "drift_report.md"
@@ -69,14 +75,21 @@ def _ensure_mon_state():
     ss.setdefault("mon_cursor", 0)
     ss.setdefault("mon_gen", 0)
     ss.setdefault("mon_psi_history", [])
+    ss.setdefault("mon_perf_history", [])
     ss.setdefault("mon_triggered", [])
+    ss.setdefault("mon_bundle", None)     # in-session retrained bundle override
 
 
 def _reset_mon():
-    for k in ("mon_stream", "mon_baseline", "mon_received", "mon_pool",
-              "mon_cursor", "mon_gen", "mon_psi_history", "mon_triggered"):
+    for k in ("mon_stream", "mon_baseline", "mon_received", "mon_pool", "mon_cursor",
+              "mon_gen", "mon_psi_history", "mon_perf_history", "mon_triggered", "mon_bundle"):
         st.session_state.pop(k, None)
     _ensure_mon_state()
+
+
+def _active_bundle() -> dict:
+    """The in-session retrained bundle if present, else the deployed ensemble."""
+    return st.session_state.get("mon_bundle") or get_ensemble()
 
 
 def _refill_pool(k: int):
@@ -112,11 +125,49 @@ def _advance_mon(bundle: dict, k: int, scenario: str):
         if len(ss.mon_psi_history) > 400:
             ss.mon_psi_history = ss.mon_psi_history[-400:]
 
+        # live performance of the aggregate decision on the (labelled) window
+        perf = window_performance(score_stream(current, bundle))
+        if perf:
+            ss.mon_perf_history.append({"n": ss.mon_received,
+                                        **{m: perf[m] for m in ("precision", "recall", "f1", "flagged_rate")}})
+            if len(ss.mon_perf_history) > 400:
+                ss.mon_perf_history = ss.mon_perf_history[-400:]
+
         now_triggered = {name for name, v in psi.items() if v >= drift.RETRAIN_PSI}
         new = now_triggered - set(ss.mon_triggered)
         if new:
             st.toast("⚠️ Retrain needed — drift on " + ", ".join(sorted(new)), icon="🚨")
+            _maybe_send_alert(sorted(new), psi)
         ss.mon_triggered = sorted(now_triggered)
+
+
+def _maybe_send_alert(new_signals, psi):
+    ss = st.session_state
+    url = ss.get("mon_webhook_url", "")
+    if ss.get("mon_auto_send") and url:
+        payload = build_alert_payload(new_signals, psi, received=ss.mon_received,
+                                      when=datetime.now().isoformat(timespec="seconds"))
+        ok, msg = send_webhook(url, payload)
+        st.toast(("📤 Alert sent" if ok else f"⚠️ Alert failed — {msg}"), icon="📤" if ok else "⚠️")
+
+
+def _do_retrain(scenario: str):
+    """Refit the models on freshly-generated current-distribution data, adopt the
+    current window as the new baseline, and reset the charts so drift + performance
+    recover under the (now-adapted) model."""
+    ss = st.session_state
+    base = _active_bundle()
+    intensity = scenario_intensity(scenario, ss.mon_received, BASELINE_N, RAMP)
+    with st.spinner(f"Retraining 3 models on {_RETRAIN_SAMPLE_N:,} current-distribution transactions…"):
+        sample = generate_pool(_RETRAIN_SAMPLE_N, seed=_SEED_BASE + 999)
+        sample = apply_scenario(sample, scenario, intensity, np.random.default_rng(_SEED_BASE + 999))
+        ss.mon_bundle = retrain_ensemble(base, sample, seed=7)
+    # adopt the current (drifted) window as the new normal so ongoing traffic matches
+    if ss.mon_stream is not None and len(ss.mon_stream):
+        ss.mon_baseline = ss.mon_stream.iloc[-WINDOW_N:].copy()
+    ss.mon_psi_history, ss.mon_perf_history, ss.mon_triggered = [], [], []
+    st.toast(f"✅ Retrained on {ss.mon_bundle['retrain_rows']:,} rows "
+             f"({ss.mon_bundle['retrain_fraud']} fraud) — baseline reset.", icon="✅")
 
 
 def _render_bell(names: list[str], latest_psi: dict | None = None):
@@ -160,6 +211,13 @@ def _render_dashboard(bundle: dict):
     st.line_chart(hist[feats + ["threshold"]], height=240)
     st.markdown("**Prediction-score drift — per model + combined**")
     st.line_chart(hist[pred_cols + ["combined", "threshold"]], height=240)
+
+    if ss.mon_perf_history:
+        st.markdown("**Model performance on the live stream** (aggregate decision vs. ground truth)")
+        perf = pd.DataFrame(ss.mon_perf_history).set_index("n")
+        st.line_chart(perf, height=220, color=_PERF_COLORS[:perf.shape[1]])
+        st.caption("Precision falls / flagged-rate rises as drift pushes legitimate traffic over the "
+                   "threshold. Fraud is rare per window, so recall is noisier.")
 
     latest = ss.mon_psi_history[-1]
     snap = pd.DataFrame([{"signal": k, "psi": v, "trigger": drift.band(v)}
@@ -209,11 +267,33 @@ def _distribution_chart(dist: pd.DataFrame) -> "alt.Chart":
     )
 
 
-def _render_live_monitor():
-    bundle = get_ensemble()
-    _ensure_mon_state()
+def _render_alerting_panel():
+    ss = st.session_state
+    with st.expander("🔔 Alerting (webhook / report)", expanded=False):
+        st.text_input("Webhook URL (Slack / Discord / generic incoming webhook)",
+                      key="mon_webhook_url", placeholder="https://hooks.slack.com/services/…")
+        st.checkbox("Auto-send when a new signal trips", key="mon_auto_send", value=False,
+                    help="Off by default. Nothing is sent unless a URL is set and this is on.")
+        a, b = st.columns(2)
+        if a.button("Send test alert"):
+            payload = build_alert_payload(["ip_billing_distance_km"], {"ip_billing_distance_km": 0.42},
+                                          received=ss.mon_received,
+                                          when=datetime.now().isoformat(timespec="seconds"))
+            ok, msg = send_webhook(ss.get("mon_webhook_url", ""), payload)
+            (st.success if ok else st.error)(msg)
+        report = incident_report_md(list(ss.mon_triggered),
+                                    ss.mon_psi_history[-1] if ss.mon_psi_history else {},
+                                    received=ss.mon_received,
+                                    when=datetime.now().isoformat(timespec="seconds"))
+        b.download_button("Download incident report", report,
+                          file_name="drift_incident.md", mime="text/markdown")
 
-    cols = st.columns([1, 2, 2, 2, 1, 1.3], vertical_alignment="bottom")
+
+def _render_live_monitor():
+    _ensure_mon_state()
+    bundle = _active_bundle()
+
+    cols = st.columns([1, 2, 1.6, 1.6, 1, 1.2], vertical_alignment="bottom")
     running = cols[0].toggle("▶ Run", key="mon_running")
     cols[1].selectbox("Scenario", SCENARIOS, key="mon_scenario")
     interval = cols[2].select_slider("Interval (s)", options=[0.5, 1.0, 2.0, 3.0], value=1.0, key="mon_interval")
@@ -222,20 +302,30 @@ def _render_live_monitor():
         _reset_mon()
         st.rerun()
     with cols[5]:
-        # Clickable alert bell, rendered outside the auto-refresh fragment so
-        # opening it isn't torn down each tick. Count reflects the last full run;
-        # live notifications also arrive via st.toast, and the "Signals in drift"
-        # metric below updates every tick.
+        # Clickable alert bell, outside the auto-refresh fragment so it isn't torn
+        # down each tick. Live pulses arrive via st.toast + the metric below.
         latest = st.session_state.mon_psi_history[-1] if st.session_state.mon_psi_history else {}
         _render_bell(list(st.session_state.mon_triggered), latest)
+
+    # Retrain + alerting live outside the fragment so clicks/inputs are stable.
+    act1, act2 = st.columns([1, 3], vertical_alignment="bottom")
+    triggered = bool(st.session_state.mon_triggered)
+    if act1.button("🔄 Retrain now", type="primary" if triggered else "secondary",
+                   help="Refit the 3 models on fresh current-distribution data and redeploy in-session."):
+        _do_retrain(st.session_state.mon_scenario)
+        st.rerun()
+    with act2:
+        if st.session_state.get("mon_bundle"):
+            st.caption("🟢 Serving an **in-session retrained** model. Reset to restore the deployed bundle.")
+        _render_alerting_panel()
 
     run_every = interval if running else None
 
     @st.fragment(run_every=run_every)
     def _tick():
         if st.session_state.get("mon_running"):
-            _advance_mon(bundle, int(st.session_state.mon_per_tick), st.session_state.mon_scenario)
-        _render_dashboard(bundle)
+            _advance_mon(_active_bundle(), int(st.session_state.mon_per_tick), st.session_state.mon_scenario)
+        _render_dashboard(_active_bundle())
 
     _tick()
 

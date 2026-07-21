@@ -62,6 +62,8 @@ def test_monitoring_live_dashboard_renders():
         "{'n': 300, 'amount': 0.02, 'ip_billing_distance_km': 0.28, "
         "'PREDICTION_SCORE_logreg': 0.05, 'PREDICTION_SCORE_rf': 0.01, "
         "'PREDICTION_SCORE_xgb': 0.31}]\n"
+        "st.session_state['mon_perf_history'] = ["
+        "{'n': 300, 'precision': 0.4, 'recall': 0.9, 'f1': 0.55, 'flagged_rate': 0.02}]\n"
         "st.session_state['mon_triggered'] = ['ip_billing_distance_km', 'PREDICTION_SCORE_xgb']\n"
         "import monitoring_view; monitoring_view.render()\n"
     )
