@@ -12,6 +12,7 @@ import streamlit as st
 # app_common wires sys.path (src/, monitoring/) — import it BEFORE the views so
 # their module-level `from ensemble/config/drift import ...` resolve.
 import app_common  # noqa: F401,E402
+import embedded_api  # noqa: E402
 import home_view  # noqa: E402
 import review_view  # noqa: E402
 import cost_view  # noqa: E402
@@ -22,6 +23,11 @@ import live_view  # noqa: E402
 import api_tester_view  # noqa: E402
 
 st.set_page_config(page_title="E-Commerce Payment Fraud Detection", layout="wide")
+
+# Start the FastAPI scoring service in-process (once) so the API Tester page
+# works on single-port hosts like Streamlit Community Cloud. No-op if a uvicorn
+# is already serving the port locally.
+embedded_api.ensure_api_running()
 
 # --- Left panel: school logo + group roster (shown on every page) ---
 _LOGO = app_common.ROOT / "hust-full.png"

@@ -1,7 +1,8 @@
 # E-Commerce Real-Time Payment Fraud Detection
 
 Business Analytics group project — an end-to-end analytics product:
-**synthetic data → EDA → cleaning → model → deployed API + review queue → monitoring.**
+**synthetic data → EDA → cleaning → 3-model ensemble → deployed API + 8-page analyst app
+(review queue, cost/ROI, evaluation, segment analytics) → drift monitoring & retraining.**
 
 Business question: *which incoming transactions are likely fraudulent, and how do
 we balance blocking fraud against approving legitimate orders?*
@@ -52,12 +53,60 @@ Once the CSV is in `data/raw/` (via `get_data.sh` or manually):
 | 2 | `python src/eda.py` | `docs/figures/*.png` + `docs/eda_summary.md` |
 | 3 | `python src/cleaning.py` | `data/processed/transactions_clean.parquet` + `docs/cleaning_report.md` |
 | 4 | `python src/features.py` | `models/feature_transformer.joblib` + `docs/feature_engineering.md` |
-| 5 | `python src/train_validate.py` | `models/fraud_model.joblib` + `docs/model_development.md` |
-| 6 | `uvicorn api.main:app --reload` | scoring API → http://127.0.0.1:8000/docs |
-| 7 | `streamlit run app/streamlit_app.py` | fraud-analyst review queue |
+| 5 | `python src/train_validate.py` | `models/fraud_model.joblib` (single) + `models/fraud_ensemble.joblib` (3-model) + `docs/model_development.md` |
+| 6 | `python -m uvicorn api.main:app --reload` | scoring API → http://127.0.0.1:8000/docs |
+| 7 | `python -m streamlit run app/streamlit_app.py` | multi-page analyst app (see below) |
 | 8 | `python monitoring/drift.py` | `monitoring/reports/drift_report.md` + `evidently_drift.html` |
 
 Or run steps 1-5 together: `./train.sh full` (full 6.36M rows) / `./train.sh sample 0.15`.
+
+> **Windows / PowerShell:** use `python -m uvicorn …` and `python -m streamlit …` — the
+> bare `uvicorn`/`streamlit` commands only work if their Scripts folder is on your PATH.
+> **You don't need to start the API separately for the app** — the Streamlit app starts
+> the scoring API in-process automatically (see [Deployment](#deployment)).
+
+## Streamlit demo app
+
+`python -m streamlit run app/streamlit_app.py` opens an eight-page product built around a
+**3-model ensemble** (Logistic Regression · Random Forest · XGBoost) with a **max-risk**
+aggregate decision (`block > review > allow`). The sidebar is ordered as a presentation
+narrative — pitch → problem → product → rigor → value → operations → serving:
+
+| Page | What it shows | Data |
+|---|---|---|
+| 🏠 **Overview** | Executive KPIs — € saved, fraud loss avoided, recall/precision, model health | held-out test |
+| 🔎 **Segment Analytics** | Where fraud concentrates: by type, hour, amount + risk-factor **lift** | full population |
+| 🛡️ **Review Queue** | Triage transactions with per-transaction **reason codes** ("why flagged") | 2k sample |
+| 📊 **Model Evaluation** | AUC-PR/ROC/PR curves, confusion matrix, cumulative-gains/lift | held-out test |
+| 💰 **Cost & ROI** | Prices the fraud/friction trade-off in €; per-model vs. ensemble comparison; editable cost matrix | held-out test |
+| 📡 **Live Feed** | Simulated real-time scoring stream | simulated |
+| 📈 **Monitoring** | PSI drift detection → automated retraining + alerting | simulated |
+| 🧪 **API Tester** | Score a hand-built transaction through the live `POST /score` endpoint | live API |
+
+Every analytical page carries a 📁 **Data** badge naming its dataset, and all €-figures use
+the cost assumptions in [`src/config.py`](src/config.py) via the shared cost model
+[`src/costs.py`](src/costs.py) — so the app, CLI, and report never disagree. Model metrics are
+reported on the **held-out temporal test split** (unseen at training) to avoid train-on-test
+leakage.
+
+## Deployment
+
+The app is designed to run on **single-port hosts** (Streamlit Community Cloud, Hugging Face
+Spaces): [`app/embedded_api.py`](app/embedded_api.py) launches the FastAPI scoring service in a
+background thread on `127.0.0.1:8000`. Because the API Tester calls it **server-side** over
+localhost inside the container, no second public port is needed — the browser only talks to
+Streamlit. (Locally, if you already run `python -m uvicorn api.main:app`, the app detects the
+open port and reuses it.)
+
+**Deploy on Streamlit Community Cloud:**
+
+1. Commit the runtime files (already handled by `.gitignore` exceptions): the 3-model bundle
+   `models/fraud_ensemble.joblib`, `data/processed/transactions_context.parquet` (~9 MB
+   synthetic stand-in), and `data/processed/sample_preview.csv`.
+2. On [share.streamlit.io](https://share.streamlit.io) → **New app**, pick the repo/branch.
+3. Set **Main file path** to `app/streamlit_app.py`.
+4. Deploy — `requirements.txt` and `packages.txt` (`libgomp1`, needed by XGBoost) at the repo
+   root are picked up automatically.
 
 ## Module → file map
 
@@ -68,8 +117,8 @@ Or run steps 1-5 together: `./train.sh full` (full 6.36M rows) / `./train.sh sam
 | M3 Cleaning | `src/cleaning.py` |
 | M4 Feature engineering | `src/features.py` |
 | M5 Model development | `src/train_validate.py` |
-| M6 Deployment | `api/main.py`, `app/streamlit_app.py` |
-| M7 Monitoring | `monitoring/drift.py` |
+| M6 Deployment | `api/main.py`, `app/*.py` (8-page Streamlit app), `app/embedded_api.py`, `src/ensemble.py`, `src/costs.py`, `src/reasons.py` |
+| M7 Monitoring | `monitoring/drift.py`, `app/monitoring_view.py`, `src/retrain.py`, `src/alerting.py` |
 | M8 Report & presentation | _TODO_ |
 
 ## Key results (full data, 6,362,620 rows, prevalence 0.129%)
@@ -91,8 +140,10 @@ Or run steps 1-5 together: `./train.sh full` (full 6.36M rows) / `./train.sh sam
 
 - [x] **P1** — data generation, data dictionary, EDA, cleaning
 - [x] **P2 (draft)** — features, model comparison, leakage check, cost threshold
-- [x] **P3 (draft)** — scoring API, review-queue UI, drift monitoring
-- [ ] Deploy to a cloud free tier (Hugging Face Spaces / Render) — **live link required**
+- [x] **P3 (draft)** — 3-model ensemble scoring API, 8-page analyst app (review queue,
+  cost/ROI, model evaluation, segment analytics, live feed), drift monitoring + retraining
+- [x] Single-port deployment ready (embedded API) — deploy to Streamlit Community Cloud
+- [ ] Publish the live link (Streamlit Community Cloud / Hugging Face Spaces)
 - [ ] Full-data build + imbalance experiments (SMOTE vs class weights)
 - [ ] M8 final report + slides
 - [ ] Fill in submission milestone dates

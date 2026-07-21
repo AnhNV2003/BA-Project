@@ -6,6 +6,7 @@ from __future__ import annotations
 import streamlit as st
 
 from api_client import DEFAULT_BASE, health, score
+from embedded_api import ensure_api_running
 
 # Editable transaction fields — (key, label, kind). Matches api.main.Transaction.
 _TYPES = ["PAYMENT", "TRANSFER", "CASH_OUT", "CASH_IN", "DEBIT"]
@@ -101,6 +102,12 @@ def render():
     st.caption("Build a transaction — from a preset or by hand — and score it through the "
                "live **POST /score** endpoint. Each model scores independently; the verdict "
                "is the max-risk aggregate.")
+    api = ensure_api_running()
+    if api.get("status") == "embedded":
+        st.caption(f"🟢 Scoring API running **in-process** at {api['base_url']} "
+                   "(single-port deployment — no separate service needed).")
+    else:
+        st.caption(f"🟢 Using externally-running API at {api['base_url']}.")
     _ensure_defaults()
 
     top = st.columns([3, 1], vertical_alignment="bottom")
