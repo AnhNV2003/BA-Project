@@ -104,6 +104,11 @@ def test_live_feed_with_data_renders_timeline():
     assert not at.exception, at.exception
 
 
+def test_api_tester_renders():
+    at = _run("import api_tester_view; api_tester_view.render()")
+    assert not at.exception, at.exception
+
+
 def test_entrypoint_navigation_runs():
     # Runs the real entrypoint through st.navigation (both pages registered),
     # which catches wiring errors like duplicate page url_paths.

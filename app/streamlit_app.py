@@ -15,6 +15,7 @@ import app_common  # noqa: F401,E402
 import review_view  # noqa: E402
 import monitoring_view  # noqa: E402
 import live_view  # noqa: E402
+import api_tester_view  # noqa: E402
 
 st.set_page_config(page_title="Fraud Detection", layout="wide")
 
@@ -24,5 +25,6 @@ nav = st.navigation([
     st.Page(review_view.render, title="Review Queue", icon="🛡️", url_path="review", default=True),
     st.Page(live_view.render, title="Live Feed", icon="📡", url_path="live"),
     st.Page(monitoring_view.render, title="Monitoring", icon="📈", url_path="monitoring"),
+    st.Page(api_tester_view.render, title="API Tester", icon="🧪", url_path="api-tester"),
 ])
 nav.run()
