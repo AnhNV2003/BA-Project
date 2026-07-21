@@ -48,6 +48,18 @@ def band(v: float) -> str:
     return "stable" if v < 0.10 else ("moderate" if v < RETRAIN_PSI else "SIGNIFICANT")
 
 
+def _fmt_num(x: float) -> str:
+    """Compact human-readable number: 1300 -> '1.3k', 165000 -> '165k', 480 -> '480'."""
+    ax = abs(float(x))
+    if ax >= 1e6:
+        v, u = x / 1e6, "M"
+    elif ax >= 1e3:
+        v, u = x / 1e3, "k"
+    else:
+        v, u = x, ""
+    return f"{v:.1f}".rstrip("0").rstrip(".") + u
+
+
 def distribution_frame(ref, cur, bins: int = 10) -> pd.DataFrame:
     """Normalized reference vs current distribution for one feature, for the
     overlaid histogram that explains a PSI value.
@@ -76,7 +88,7 @@ def distribution_frame(ref, cur, bins: int = 10) -> pd.DataFrame:
     hist_edges[0], hist_edges[-1] = -np.inf, np.inf
     r = np.histogram(ref, hist_edges)[0] / max(1, ref.size)
     c = np.histogram(cur, hist_edges)[0] / max(1, cur.size)
-    labels = [f"{edges[i]:.3g}–{edges[i + 1]:.3g}" for i in range(len(edges) - 1)]
+    labels = [f"{_fmt_num(edges[i])}–{_fmt_num(edges[i + 1])}" for i in range(len(edges) - 1)]
     return pd.DataFrame({"reference": r, "current": c}, index=labels)
 
 

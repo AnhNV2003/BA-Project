@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
@@ -181,7 +182,31 @@ def _render_dashboard(bundle: dict):
             with col:
                 st.caption(f"{feat} · PSI {latest.get(feat, float('nan')):.3f}")
                 dist = drift.distribution_frame(ss.mon_baseline[feat], current[feat])
-                st.bar_chart(dist, color=[_REF_COLOR, _CUR_COLOR], stack=False, height=200)
+                st.altair_chart(_distribution_chart(dist), use_container_width=True)
+
+
+def _distribution_chart(dist: pd.DataFrame) -> "alt.Chart":
+    """Grouped bar chart of reference vs current, bins kept in numeric order with
+    rotated readable labels and a percentage y-axis."""
+    long = dist.reset_index(names="bin").melt("bin", var_name="set", value_name="frac")
+    long["order"] = long.groupby("set").cumcount()
+    return (
+        alt.Chart(long, height=210)
+        .mark_bar()
+        .encode(
+            x=alt.X("bin:N", title=None,
+                    sort=alt.EncodingSortField(field="order", op="min", order="ascending"),
+                    axis=alt.Axis(labelAngle=-40, labelLimit=90)),
+            xOffset=alt.XOffset("set:N", sort=["reference", "current"]),
+            y=alt.Y("frac:Q", title="share", axis=alt.Axis(format="%")),
+            color=alt.Color("set:N", title=None,
+                            scale=alt.Scale(domain=["reference", "current"],
+                                            range=[_REF_COLOR, _CUR_COLOR])),
+            tooltip=[alt.Tooltip("bin:N", title="range"),
+                     alt.Tooltip("set:N", title="window"),
+                     alt.Tooltip("frac:Q", title="share", format=".1%")],
+        )
+    )
 
 
 def _render_live_monitor():
