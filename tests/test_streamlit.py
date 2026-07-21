@@ -48,6 +48,27 @@ def test_monitoring_renders():
     assert not at.exception, at.exception
 
 
+def test_monitoring_live_dashboard_renders():
+    # Seed a baseline + PSI history so the Live Monitor dashboard path runs
+    # (feature chart, prediction chart, bell with triggers, snapshot table).
+    body = (
+        "import streamlit as st\n"
+        "from simulate import generate_pool\n"
+        "pool = generate_pool(n=700, seed=5)\n"
+        "st.session_state['mon_baseline'] = pool.iloc[:300].copy()\n"
+        "st.session_state['mon_stream'] = pool.iloc[:600].reset_index(drop=True)\n"
+        "st.session_state['mon_received'] = 600\n"
+        "st.session_state['mon_psi_history'] = ["
+        "{'n': 300, 'amount': 0.02, 'ip_billing_distance_km': 0.28, "
+        "'PREDICTION_SCORE_logreg': 0.05, 'PREDICTION_SCORE_rf': 0.01, "
+        "'PREDICTION_SCORE_xgb': 0.31}]\n"
+        "st.session_state['mon_triggered'] = ['ip_billing_distance_km', 'PREDICTION_SCORE_xgb']\n"
+        "import monitoring_view; monitoring_view.render()\n"
+    )
+    at = _run(body)
+    assert not at.exception, at.exception
+
+
 def test_live_feed_renders():
     at = _run(_LIVE)
     assert not at.exception, at.exception

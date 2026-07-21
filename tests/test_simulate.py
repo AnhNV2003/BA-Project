@@ -9,7 +9,43 @@ sys.path.insert(0, str(ROOT / "src"))
 
 import pandas as pd  # noqa: E402
 
-from simulate import decision_timeline, generate_pool, score_stream  # noqa: E402
+import numpy as np  # noqa: E402
+
+from simulate import (  # noqa: E402
+    SCENARIOS, apply_scenario, decision_timeline, generate_pool,
+    scenario_intensity, score_stream,
+)
+
+
+def test_scenario_intensity_baseline_and_ramp():
+    # Normal is always 0
+    assert scenario_intensity("Normal", 1000, 300) == 0.0
+    # before baseline is filled: 0 (clean reference)
+    assert scenario_intensity("Fraud campaign", 100, 300) == 0.0
+    assert scenario_intensity("Sudden spike", 100, 300) == 0.0
+    # after baseline: campaign ramps, spike jumps to 1
+    assert scenario_intensity("Sudden spike", 300, 300) == 1.0
+    assert scenario_intensity("Fraud campaign", 300, 300, ramp=300) == 0.0
+    assert 0.0 < scenario_intensity("Fraud campaign", 450, 300, ramp=300) < 1.0
+    assert scenario_intensity("Fraud campaign", 700, 300, ramp=300) == 1.0
+
+
+def test_apply_scenario_monotonic_drift():
+    rng = np.random.default_rng(0)
+    base = generate_pool(n=800, seed=11)
+    none = apply_scenario(base, "Normal", 1.0, rng)
+    assert none["amount"].equals(base["amount"])   # normal = no-op
+
+    mild = apply_scenario(base, "Fraud campaign", 0.3, np.random.default_rng(1))
+    strong = apply_scenario(base, "Fraud campaign", 1.0, np.random.default_rng(1))
+    # stronger intensity -> higher amounts, farther IPs, more failed attempts
+    assert base["amount"].mean() < mild["amount"].mean() < strong["amount"].mean()
+    assert base["ip_billing_distance_km"].mean() < strong["ip_billing_distance_km"].mean()
+    assert base["num_failed_payment_attempts"].mean() <= strong["num_failed_payment_attempts"].mean()
+
+
+def test_scenarios_list():
+    assert SCENARIOS == ["Normal", "Fraud campaign", "Sudden spike"]
 
 
 def test_decision_timeline_buckets_and_colors_columns():
