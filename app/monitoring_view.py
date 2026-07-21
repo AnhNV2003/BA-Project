@@ -35,7 +35,12 @@ _TEST_N = 60000             # frozen held-out test set for version comparison. L
                             # AUC-PR saturate at 1.0 and stop discriminating versions.
 _PERF_COLORS = ["#2E7D32", "#1565C0", "#8E24AA", "#EF6C00"]  # precision/recall/f1/flagged
 
-_BAND_COLORS = {"stable": "#e8f5e9", "moderate": "#fff8e1", "SIGNIFICANT": "#ffebee"}
+# (bg, top-border, text) per band — for the PSI snapshot tiles.
+_CARD_COLORS = {
+    "stable": ("#e8f5e9", "#2E7D32", "#1B5E20"),
+    "moderate": ("#fff8e1", "#F6A445", "#8A6D00"),
+    "SIGNIFICANT": ("#ffebee", "#E5484D", "#B3261E"),
+}
 _REPORT_MD = drift.REPORTS / "drift_report.md"
 _REPORT_HTML = drift.REPORTS / "evidently_drift.html"
 
@@ -244,6 +249,35 @@ def _render_bell(names: list[str], latest_psi: dict | None = None):
             st.success("No drift alerts — all signals below threshold.")
 
 
+def _pretty_signal(sig: str) -> str:
+    return sig.replace("PREDICTION_SCORE_", "pred · ")
+
+
+def _render_psi_cards(latest: dict):
+    """PSI snapshot as one band-coloured box per signal, value centered."""
+    cards = []
+    for sig, val in latest.items():
+        if sig == "n":
+            continue
+        band = drift.band(val)
+        bg, border, txt = _CARD_COLORS[band]
+        cards.append(
+            f'<div style="background:{bg};border-top:4px solid {border};border-radius:8px;'
+            f'padding:10px 8px 8px;">'
+            f'<div style="font-size:.72rem;color:#444;word-break:break-word;line-height:1.1;'
+            f'min-height:2.2em;">{_pretty_signal(sig)}</div>'
+            f'<div style="font-size:1.7rem;font-weight:700;color:{txt};text-align:center;'
+            f'line-height:1.3;">{val:.3f}</div>'
+            f'<div style="font-size:.66rem;font-weight:600;color:{txt};text-align:center;'
+            f'text-transform:uppercase;letter-spacing:.04em;">{band}</div>'
+            f'</div>'
+        )
+    grid = ('<div style="display:grid;gap:10px;margin:4px 0 14px;'
+            'grid-template-columns:repeat(auto-fill,minmax(150px,1fr));">'
+            + "".join(cards) + '</div>')
+    st.markdown(grid, unsafe_allow_html=True)
+
+
 def _render_dashboard(bundle: dict):
     ss = st.session_state
     triggered = list(ss.mon_triggered)
@@ -259,6 +293,13 @@ def _render_dashboard(bundle: dict):
         st.info(f"Press **▶ Run**. Drift starts once the baseline ({BASELINE_N} transactions) "
                 "is captured; pick **Fraud campaign** or **Sudden spike** to watch it trip.")
         return
+
+    # Drift snapshot as colored tiles, at the top of the dashboard.
+    latest = ss.mon_psi_history[-1]
+    st.markdown("**Drift snapshot** — PSI per signal (latest window)")
+    _render_psi_cards(latest)
+    st.caption(f"Reference: first {BASELINE_N} txns (frozen) · Current: last {WINDOW_N} txns · "
+               f"trigger at PSI ≥ {drift.RETRAIN_PSI}.")
 
     hist = pd.DataFrame(ss.mon_psi_history).set_index("n")
     hist["threshold"] = drift.RETRAIN_PSI
@@ -277,15 +318,6 @@ def _render_dashboard(bundle: dict):
         st.line_chart(perf, height=220, color=_PERF_COLORS[:perf.shape[1]])
         st.caption("Precision falls / flagged-rate rises as drift pushes legitimate traffic over the "
                    "threshold. Fraud is rare per window, so recall is noisier.")
-
-    latest = ss.mon_psi_history[-1]
-    snap = pd.DataFrame([{"signal": k, "psi": v, "trigger": drift.band(v)}
-                         for k, v in latest.items() if k != "n"])
-    styler = snap.style.format({"psi": "{:.3f}"}).map(
-        lambda v: f"background-color: {_BAND_COLORS.get(v, '')}", subset=["trigger"])
-    st.dataframe(styler, use_container_width=True, hide_index=True)
-    st.caption(f"Reference: first {BASELINE_N} txns (frozen) · Current: last {WINDOW_N} txns. "
-               f"Retrain trigger at PSI ≥ {drift.RETRAIN_PSI} (dashed threshold line).")
 
     # Reference vs current distribution per feature — explains each PSI value.
     st.markdown("**Reference vs current distribution per feature** "
