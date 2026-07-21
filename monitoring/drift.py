@@ -48,6 +48,38 @@ def band(v: float) -> str:
     return "stable" if v < 0.10 else ("moderate" if v < RETRAIN_PSI else "SIGNIFICANT")
 
 
+def distribution_frame(ref, cur, bins: int = 10) -> pd.DataFrame:
+    """Normalized reference vs current distribution for one feature, for the
+    overlaid histogram that explains a PSI value.
+
+    Discrete/low-cardinality features (e.g. is_new_device, hour_of_day) use one
+    bucket per value; continuous features use reference-quantile bins (the same
+    binning idea PSI uses). Columns: ['reference', 'current'] as fractions.
+    """
+    ref = np.asarray(ref, dtype=float)
+    cur = np.asarray(cur, dtype=float)
+    ref = ref[~np.isnan(ref)]
+    cur = cur[~np.isnan(cur)]
+    uniq = np.unique(ref)
+
+    if uniq.size <= min(bins, 12):
+        vals = np.unique(np.concatenate([uniq, np.unique(cur)])) if cur.size else uniq
+        r = np.array([(ref == v).mean() if ref.size else 0.0 for v in vals])
+        c = np.array([(cur == v).mean() if cur.size else 0.0 for v in vals])
+        idx = [str(int(v)) if float(v).is_integer() else f"{v:.2f}" for v in vals]
+        return pd.DataFrame({"reference": r, "current": c}, index=idx)
+
+    edges = np.unique(np.quantile(ref, np.linspace(0, 1, bins + 1)))
+    if edges.size < 3:
+        edges = np.unique(np.quantile(ref, [0.0, 0.5, 1.0]))
+    hist_edges = edges.astype(float).copy()
+    hist_edges[0], hist_edges[-1] = -np.inf, np.inf
+    r = np.histogram(ref, hist_edges)[0] / max(1, ref.size)
+    c = np.histogram(cur, hist_edges)[0] / max(1, cur.size)
+    labels = [f"{edges[i]:.3g}–{edges[i + 1]:.3g}" for i in range(len(edges) - 1)]
+    return pd.DataFrame({"reference": r, "current": c}, index=labels)
+
+
 def load():
     p = DATA_PROCESSED / "transactions_context.parquet"
     if not p.exists():

@@ -25,6 +25,9 @@ _BAND_COLORS = {"stable": "#e8f5e9", "moderate": "#fff8e1", "SIGNIFICANT": "#ffe
 _REPORT_MD = drift.REPORTS / "drift_report.md"
 _REPORT_HTML = drift.REPORTS / "evidently_drift.html"
 
+_REF_COLOR = "#6C8EBF"   # blue  — reference baseline
+_CUR_COLOR = "#F6A445"   # orange — current window
+
 _SEED_BASE = 77000
 BASELINE_N = 300     # transactions frozen as the reference baseline
 WINDOW_N = 300       # rolling current window
@@ -165,6 +168,20 @@ def _render_dashboard(bundle: dict):
     st.dataframe(styler, use_container_width=True, hide_index=True)
     st.caption(f"Reference: first {BASELINE_N} txns (frozen) · Current: last {WINDOW_N} txns. "
                f"Retrain trigger at PSI ≥ {drift.RETRAIN_PSI} (dashed threshold line).")
+
+    # Reference vs current distribution per feature — explains each PSI value.
+    st.markdown("**Reference vs current distribution per feature** "
+                "(blue = reference baseline · orange = current window)")
+    current = ss.mon_stream.iloc[-WINDOW_N:]
+    feats = [f for f in drift.MONITORED if f in current.columns]
+    per_row = 3
+    for i in range(0, len(feats), per_row):
+        row = feats[i:i + per_row]
+        for col, feat in zip(st.columns(len(row)), row):
+            with col:
+                st.caption(f"{feat} · PSI {latest.get(feat, float('nan')):.3f}")
+                dist = drift.distribution_frame(ss.mon_baseline[feat], current[feat])
+                st.bar_chart(dist, color=[_REF_COLOR, _CUR_COLOR], stack=False, height=200)
 
 
 def _render_live_monitor():

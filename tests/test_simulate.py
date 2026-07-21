@@ -48,6 +48,27 @@ def test_scenarios_list():
     assert SCENARIOS == ["Normal", "Fraud campaign", "Sudden spike"]
 
 
+def test_distribution_frame_continuous_and_discrete():
+    sys.path.insert(0, str(ROOT / "monitoring"))
+    from drift import distribution_frame
+
+    rng = np.random.default_rng(0)
+    # continuous: reference-quantile bins, both columns normalized (~sum to 1)
+    ref = rng.normal(100, 15, 5000)
+    cur = rng.normal(130, 15, 5000)   # shifted
+    d = distribution_frame(ref, cur, bins=10)
+    assert list(d.columns) == ["reference", "current"]
+    assert abs(d["reference"].sum() - 1.0) < 1e-6
+    assert abs(d["current"].sum() - 1.0) < 1e-6
+    # the shift shows up as more current mass in the higher bins than reference
+    assert d["current"].iloc[-1] > d["reference"].iloc[-1]
+
+    # discrete: one bucket per value
+    dd = distribution_frame(np.array([0, 0, 0, 1]), np.array([0, 1, 1, 1]))
+    assert list(dd.index) == ["0", "1"]
+    assert dd.loc["0", "reference"] == 0.75 and dd.loc["1", "current"] == 0.75
+
+
 def test_decision_timeline_buckets_and_colors_columns():
     df = pd.DataFrame({
         "arrival": list(range(1, 21)),
