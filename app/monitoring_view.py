@@ -98,12 +98,13 @@ def _ensure_mon_state():
     ss.setdefault("mon_bundle", None)     # in-session retrained bundle override
     ss.setdefault("mon_versions", [])     # model version registry (audit log)
     ss.setdefault("mon_test_set", None)   # frozen labelled test set for comparison
+    ss.setdefault("mon_retrain_count", 0)  # monotonic — varies retrain data each time
 
 
 def _reset_mon():
     for k in ("mon_stream", "mon_baseline", "mon_received", "mon_pool", "mon_cursor",
               "mon_gen", "mon_psi_history", "mon_perf_history", "mon_triggered", "mon_bundle",
-              "mon_versions", "mon_test_set"):
+              "mon_versions", "mon_test_set", "mon_retrain_count"):
         st.session_state.pop(k, None)
     _ensure_mon_state()
 
@@ -190,9 +191,14 @@ def _do_retrain(scenario: str):
     _register_deployed_version()
     base = _active_bundle()
     intensity = scenario_intensity(scenario, ss.mon_received, BASELINE_N, RAMP)
-    with st.spinner(f"Retraining 3 models on {_RETRAIN_SAMPLE_N:,} current-distribution transactions…"):
-        sample = apply_scenario(generate_pool(_RETRAIN_SAMPLE_N, seed=_SEED_BASE + 999),
-                                scenario, intensity, np.random.default_rng(_SEED_BASE + 999))
+    # Fresh data every retrain: a monotonic counter varies the generation seed, so
+    # each retrain trains on a genuinely new current-distribution sample (not the
+    # same 60k each time). Persisted across the retrain reset; cleared only on Reset.
+    ss.mon_retrain_count += 1
+    rseed = _SEED_BASE + 1000 + ss.mon_retrain_count
+    with st.spinner(f"Retraining 3 models on {_RETRAIN_SAMPLE_N:,} fresh current-distribution transactions…"):
+        sample = apply_scenario(generate_pool(_RETRAIN_SAMPLE_N, seed=rseed),
+                                scenario, intensity, np.random.default_rng(rseed))
         new_bundle = retrain_ensemble(base, sample, seed=7)
     ss.mon_bundle = new_bundle
 
@@ -216,9 +222,9 @@ def _do_retrain(scenario: str):
         ss.pop(k, None)
     ss.mon_psi_history, ss.mon_perf_history, ss.mon_triggered = [], [], []
     _ensure_mon_state()
-    st.toast(f"✅ Retrained → Model v{ss.mon_versions[-1]['version']} "
-             f"({new_bundle['retrain_rows']:,} rows). Monitor reset — run a scenario to test v"
-             f"{ss.mon_versions[-1]['version']} against fresh drift.", icon="✅")
+    st.toast(f"✅ Retrained → Model v{ss.mon_versions[-1]['version']} on fresh data "
+             f"({new_bundle['retrain_rows']:,} rows, {new_bundle['retrain_fraud']} fraud). "
+             "Monitor reset — run a scenario to test it against fresh drift.", icon="✅")
 
 
 def _render_bell(names: list[str], latest_psi: dict | None = None):
