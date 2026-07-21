@@ -30,7 +30,9 @@ from alerting import build_alert_payload, incident_report_md, send_webhook
 _RETRAIN_SAMPLE_N = 60000   # labelled rows for an in-app retrain — large enough
                             # to carry ~90 fraud (fewer starves the refit and it
                             # regresses vs the deployed model)
-_TEST_N = 4000              # frozen held-out test set for version comparison
+_TEST_N = 60000             # frozen held-out test set for version comparison. Large
+                            # so it carries ~90 fraud — a small set (~6 fraud) makes
+                            # AUC-PR saturate at 1.0 and stop discriminating versions.
 _PERF_COLORS = ["#2E7D32", "#1565C0", "#8E24AA", "#EF6C00"]  # precision/recall/f1/flagged
 
 _BAND_COLORS = {"stable": "#e8f5e9", "moderate": "#fff8e1", "SIGNIFICANT": "#ffebee"}
@@ -359,27 +361,28 @@ def _render_version_history():
             return
         rows = [_version_table_row(v, ss.mon_test_set) for v in ss.mon_versions]
         table = pd.DataFrame(rows)
+        fraud_n = int(ss.mon_test_set["isFraud"].sum())
         st.caption(f"All versions evaluated on the **same frozen test set** "
-                   f"({len(ss.mon_test_set):,} transactions, current distribution). "
-                   "Higher precision/F1/AUC-PR after retrain = evidence the retrain helped.")
+                   f"({len(ss.mon_test_set):,} transactions · {fraud_n} fraud, current distribution). "
+                   "**AUC-PR** (ranking quality, threshold-independent) is the reliable comparison — "
+                   "higher after retrain = the model ranks fraud better on the drifted data. "
+                   "Precision/recall/F1 are shown too but are noisy here because fraud is rare (~0.15%).")
         st.dataframe(
             table.style.format({"precision": "{:.3f}", "recall": "{:.3f}",
                                 "f1": "{:.3f}", "auc_pr": "{:.3f}",
                                 "train_rows": "{:,.0f}", "train_fraud": "{:,.0f}"}),
             use_container_width=True, hide_index=True,
         )
-        # grouped bar chart: metric value per version
-        melt = table.melt(id_vars="model", value_vars=["precision", "f1", "auc_pr"],
-                          var_name="metric", value_name="value").dropna()
-        if len(melt):
+        # Headline evidence: AUC-PR per version (the metric that reliably discriminates).
+        chart_df = table[["model", "auc_pr"]].dropna()
+        if len(chart_df):
             chart = (
-                alt.Chart(melt, height=240).mark_bar()
+                alt.Chart(chart_df, height=240).mark_bar()
                 .encode(
-                    x=alt.X("metric:N", title=None, axis=alt.Axis(labelAngle=0)),
-                    xOffset=alt.XOffset("model:N"),
-                    y=alt.Y("value:Q", title="score on frozen test set"),
-                    color=alt.Color("model:N", title="version"),
-                    tooltip=["model", "metric", alt.Tooltip("value:Q", format=".3f")],
+                    x=alt.X("model:N", title=None, axis=alt.Axis(labelAngle=0)),
+                    y=alt.Y("auc_pr:Q", title="AUC-PR on frozen test set", scale=alt.Scale(domain=[0, 1])),
+                    color=alt.Color("model:N", title="version", legend=None),
+                    tooltip=["model", alt.Tooltip("auc_pr:Q", format=".3f")],
                 )
             )
             st.altair_chart(chart, use_container_width=True)
@@ -450,7 +453,7 @@ def _render_live_monitor():
 
 
 def render():
-    st.title("📈 Monitoring — Drift")
+    st.title("📈 Monitoring - Drift")
     tab_reports, tab_live = st.tabs(["📄 Reports", "🔴 Live Monitor"])
     with tab_reports:
         _render_reports()
