@@ -45,3 +45,11 @@ def test_review_queue_renders():
 def test_monitoring_renders():
     at = _run(_MONITOR)
     assert not at.exception, at.exception
+
+
+def test_entrypoint_navigation_runs():
+    # Runs the real entrypoint through st.navigation (both pages registered),
+    # which catches wiring errors like duplicate page url_paths.
+    at = AppTest.from_file(str(APP / "streamlit_app.py"))
+    at.run(timeout=60)
+    assert not at.exception, at.exception

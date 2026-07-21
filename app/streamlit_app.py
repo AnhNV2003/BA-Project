@@ -18,7 +18,9 @@ import monitoring_view  # noqa: E402
 st.set_page_config(page_title="Fraud Detection", layout="wide")
 
 nav = st.navigation([
-    st.Page(review_view.render, title="Review Queue", icon="🛡️", default=True),
-    st.Page(monitoring_view.render, title="Monitoring", icon="📈"),
+    # Explicit url_path is required: both page callables are named `render`, so
+    # Streamlit would otherwise infer the same pathname for both and reject it.
+    st.Page(review_view.render, title="Review Queue", icon="🛡️", url_path="review", default=True),
+    st.Page(monitoring_view.render, title="Monitoring", icon="📈", url_path="monitoring"),
 ])
 nav.run()
