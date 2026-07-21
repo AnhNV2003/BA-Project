@@ -23,6 +23,7 @@ AppTest = pytest.importorskip("streamlit.testing.v1").AppTest
 
 _REVIEW = "import review_view; review_view.render()"
 _MONITOR = "import monitoring_view; monitoring_view.render()"
+_LIVE = "import live_view; live_view.render()"
 
 
 def _run(body: str):
@@ -44,6 +45,11 @@ def test_review_queue_renders():
 
 def test_monitoring_renders():
     at = _run(_MONITOR)
+    assert not at.exception, at.exception
+
+
+def test_live_feed_renders():
+    at = _run(_LIVE)
     assert not at.exception, at.exception
 
 
