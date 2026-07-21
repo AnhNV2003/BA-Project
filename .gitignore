@@ -55,3 +55,13 @@ scored.csv
 # Secrets — Streamlit secrets (webhook URLs, tokens). NEVER commit.
 .streamlit/secrets.toml
 .env
+
+# LaTeX build artifacts (report/main.tex + figures + main.pdf ARE kept)
+report/*.aux
+report/*.log
+report/*.out
+report/*.fls
+report/*.fdb_latexmk
+report/*.toc
+report/*.synctex.gz
+report/build*.log
