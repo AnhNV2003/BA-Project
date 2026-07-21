@@ -10,6 +10,7 @@ Two tabs:
 """
 from __future__ import annotations
 
+import os
 from datetime import datetime
 
 import altair as alt
@@ -70,8 +71,21 @@ def _render_reports():
 # --------------------------------------------------------------------------- #
 # Live Monitor tab
 # --------------------------------------------------------------------------- #
+def _default_webhook() -> str:
+    """Default alert webhook from Streamlit secrets or the ALERT_WEBHOOK_URL env
+    var. Kept out of source/git — configure it in .streamlit/secrets.toml."""
+    try:
+        v = st.secrets.get("alert_webhook_url", "")
+        if v:
+            return str(v)
+    except Exception:
+        pass
+    return os.environ.get("ALERT_WEBHOOK_URL", "")
+
+
 def _ensure_mon_state():
     ss = st.session_state
+    ss.setdefault("mon_webhook_url", _default_webhook())
     ss.setdefault("mon_stream", None)
     ss.setdefault("mon_baseline", None)
     ss.setdefault("mon_received", 0)
