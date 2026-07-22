@@ -73,13 +73,13 @@ report/*.synctex.gz
 report/build*.log
 
 # Beamer/LaTeX build artifacts for the presentation (.tex + .pdf + images ARE kept)
-Group 1 Presentation Slides/*.aux
-Group 1 Presentation Slides/*.log
-Group 1 Presentation Slides/*.out
-Group 1 Presentation Slides/*.fls
-Group 1 Presentation Slides/*.fdb_latexmk
-Group 1 Presentation Slides/*.toc
-Group 1 Presentation Slides/*.nav
-Group 1 Presentation Slides/*.snm
-Group 1 Presentation Slides/*.synctex.gz
-Group 1 Presentation Slides/build*.log
+report/Group 1 Presentation Slides/*.aux
+report/Group 1 Presentation Slides/*.log
+report/Group 1 Presentation Slides/*.out
+report/Group 1 Presentation Slides/*.fls
+report/Group 1 Presentation Slides/*.fdb_latexmk
+report/Group 1 Presentation Slides/*.toc
+report/Group 1 Presentation Slides/*.nav
+report/Group 1 Presentation Slides/*.snm
+report/Group 1 Presentation Slides/*.synctex.gz
+report/Group 1 Presentation Slides/build*.log

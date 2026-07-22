@@ -281,15 +281,17 @@
 			\resizebox{\linewidth}{!}{%
 			\begin{tikzpicture}
 			\begin{axis}[
-				xbar, bar width=13pt,
-				width=9cm, height=3.9cm,
-				enlarge y limits=0.32,
-				xmin=0, xmax=1.05,
+				xbar, bar width=16pt,
+				width=9cm, height=4.3cm,
+				enlarge y limits=0.5,
+				xmin=0, xmax=1.08, clip=false,
+				xtick={0,0.5,1}, xticklabel style={/pgf/number format/fixed},
 				symbolic y coords={LogReg,Random Forest,XGBoost},
-				ytick=data,
-				nodes near coords, nodes near coords align={horizontal},
-				every node near coord/.append style={font=\scriptsize},
-				tick label style={font=\footnotesize},
+				ytick=data, ytick style={draw=none},
+				nodes near coords={\pgfmathprintnumber[fixed,fixed zerofill,precision=3]{\pgfplotspointmeta}},
+				nodes near coords align={horizontal},
+				every node near coord/.append style={font=\scriptsize,xshift=2pt},
+				tick label style={font=\scriptsize},
 				xlabel={}, axis lines=left,
 			]
 			\addplot[fill=hustprimary,draw=hustprimary] coordinates
