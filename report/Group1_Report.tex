@@ -249,6 +249,8 @@ Share of fraudulent money intercepted before loss.\\
 \noindent The total exposed fraud amount in PaySim is \textbf{12{,}056{,}415{,}427.84}
 currency units; ``loss avoided'' is measured against this denominator.
 
+Read as a set, the three KPIs describe different faces of the same decision and are designed to pull against one another. Prevalence ($0.129\%$, a $774{:}1$ imbalance) is the KPI a risk manager should internalise first, because it silently caps what the others can achieve: at this base rate a model that simply never flags anything is already $99.87\%$ accurate, which is why accuracy is discarded outright, and it is also why precision will look structurally low - when genuine frauds are outnumbered $774$ to one, even an excellent model must surface many legitimate transactions for each fraud it catches. The false-positive rate is the friction-and-capacity dial: because $6{,}354{,}407$ legitimate transactions sit behind it, even a fraction-of-a-percent movement in FPR translates into tens of thousands of wrongly flagged customers and a proportional surge in review-queue volume, so this is the KPI that governs customer experience and operational load. Financial-loss-avoided is the north-star, and it is deliberately measured in money against the $12.06$-billion-unit exposure rather than in fraud counts: it is superior to recall precisely because recall weights every fraud equally, whereas the business cares almost exclusively that the \emph{largest} frauds are the ones intercepted - a model could catch most fraud cases and still haemorrhage money if it misses the few high-value ones. The tension is then explicit: raising loss-avoided requires lowering the decision threshold, which mechanically inflates the false-positive rate and the review load, and it is the cost model - not any single KPI - that decides where on this curve the platform should operate.
+
 \section{Cost model overview}
 \label{sec:costoverview}
 
@@ -265,6 +267,14 @@ The coefficients $c_{FN}, c_{FP}, c_{MR}$ are business assumptions kept in
 \code{src/config.py} so that threshold selection and the report never drift apart. Their
 derivation, current values, and a sensitivity discussion are given in
 Section~\ref{sec:cost}.
+
+The three-sided trade-off matters precisely because its three arms are denominated in incommensurable units: missed fraud is a \emph{variable} loss that scales with the transaction amount, a false alarm is a roughly \emph{fixed} charge against the customer relationship (friction, churn, and the labour of unwinding a wrongly blocked order), and review capacity is a hard \emph{operational} constraint on how many flags the team can physically clear in a day. No accuracy-style metric can arbitrate between them, because accuracy treats every transaction as one identical unit and every error as equivalent - it would score a missed multi-million fraud and a wrongly declined small purchase as the same mistake, which is exactly the judgement a risk function must never make. Collapsing the problem into the single expected-cost scalar of Equation~\ref{eq:cost} is therefore not a mathematical convenience but the correct decision lens: it forces the business to state its exchange rates explicitly (how many currency units of customer friction is one unit of fraud loss worth?), records those assumptions in one auditable place rather than leaving them implicit inside an analyst's threshold choice, and converts a subjective negotiation into an optimisation with a unique cost-minimising answer. Crucially, because the false-negative term is weighted by the amount at risk rather than by a flat per-case penalty, the objective is automatically amount-sensitive: it makes the resulting policy more willing to block a large transfer than a small payment - the exact risk-manager instinct that accuracy, and even $F_1$, are structurally unable to express.
+
+The single most consequential quantity in the cost model is the ratio $c_{FP}/c_{FN}$, which fixes a break-even amount of $25$ currency units. Its interpretation is stark: a suspected fraud is worth blocking whenever the amount at stake exceeds $25$ units, because a missed fraud costs the \emph{full} amount while a false alarm costs a flat $25$. The $c_{FN}=1.0\times\text{amount}$ assumption is not arbitrary - it reflects the mechanics of push-payment fraud, where funds are exfiltrated through TRANSFER and CASH\_OUT and are effectively unrecoverable once the destination account is emptied, so the platform genuinely absorbs the whole amount. Since the median fraud runs to hundreds of thousands of units, essentially every fraud clears the $25$-unit break-even by three to four orders of magnitude, and the economically rational policy is unambiguous: block aggressively and tolerate a large volume of false alarms in exchange for missing almost no material fraud. This is why the deployed operating point later reads as recall $\approx 0.98$ against precision $\approx 0.17$ - roughly five of every six flags are in fact legitimate. That low precision is a \emph{designed} outcome of the cost arithmetic, not a modelling defect: each of the five false alarms costs on the order of $25$ units (and only $3$ to route through manual review), while the one genuine fraud among them saves hundreds of thousands, so the trade is overwhelmingly positive - the policy intercepts $99.9\%$ of fraud value while flagging only about $2.4\%$ of traffic. The reader should therefore expect the low precision reported in Module 5 and read a flag not as ``this transaction is fraud'' but as ``the expected loss from \emph{not} reviewing this exceeds the cost of reviewing it.''
+
+\begin{keybox}
+\textbf{Insight - low precision is the policy, not a failure.} With a break-even of just $25$ currency units set against a median fraud of hundreds of thousands, the cost arithmetic \emph{mandates} blocking widely. Precision near $0.17$ is simply the price of intercepting $99.9\%$ of a $12.06$-billion-unit fraud exposure - and because each false alarm costs about $25$ units against six-figure savings per catch, it is the cheapest price available. Fraud detection here is a cost-optimisation problem, and its optimum is deliberately high-recall by design.
+\end{keybox}
 
 \section{Team and role distribution}
 
@@ -512,6 +522,14 @@ function rather than the default 0.5.
 \label{fig:imbalance}
 \end{figure}
 
+The 774:1 ratio is best read as a needle-in-a-haystack problem: for every fraudulent transaction the model must sift through roughly 774 legitimate ones. Its first consequence is that accuracy becomes actively misleading. A degenerate classifier that labels \emph{every} transaction legitimate already scores 99.87\% accuracy, yet it catches zero fraud and averts none of the 12.06 billion in exposure. A high accuracy figure here is therefore evidence of nothing - it merely restates the base rate. This is why we abandon accuracy for AUC-PR, whose no-skill baseline is the prevalence itself ($\approx 0.00129$) and which credits the model only for genuine precision-recall gains on the minority class.
+
+The same rarity explains the wide gap between our headline ROC-AUC (0.999) and AUC-PR (0.907) for XGBoost: with 774 negatives per positive, even a minute false-positive rate floods the far larger negative pool, so ROC-AUC saturates near 1.0 while precision stays modest (0.173). Imbalance also propagates into the operating point. It forces class weighting during training and a threshold drawn from the cost function rather than the naive 0.5, because at a 0.129\% base rate the default cut-off would simply optimise for the negatives that dominate the loss. In short, the class ratio is not a preprocessing nuisance - it dictates the metric, the objective, and the recall-first posture of the entire pipeline.
+
+\begin{keybox}
+\textbf{The accuracy trap.} At a 0.129\% fraud rate, a model that predicts ``always legitimate'' is 99.87\% accurate and 100\% useless. What a high accuracy number measures here is rarity, not skill - which is exactly why this project is graded on AUC-PR, recall, and avoided loss instead of accuracy.
+\end{keybox}
+
 \section{Fraud by transaction type}
 
 Fraud is structurally confined to two transaction types (Figure~\ref{fig:bytype},
@@ -544,6 +562,10 @@ PAYMENT & 0 & 0.000\\
 \label{tab:bytype}
 \end{minipage}
 
+The confinement of all fraud to \code{TRANSFER} and \code{CASH\_OUT} is not a sampling accident but a direct expression of how money is stolen. These are the only two channels that move value \emph{out} of a victim's account and into the attacker's control: a \code{TRANSFER} relocates stolen funds to a mule account, and a \code{CASH\_OUT} converts them to untraceable cash. The canonical scheme chains the two - transfer-in, then cash-out - which is precisely why the frauds split across both types (4{,}097 and 4{,}116). The three clean channels fail the attacker's economics: \code{PAYMENT} and \code{DEBIT} route funds to merchants for goods rather than returning liquid value, and \code{CASH\_IN} \emph{adds} money to an account, which no fraudster does to themselves. The zeros in Table~\ref{tab:bytype} are therefore structural, not statistical noise.
+
+Operationally this is the most valuable single finding in the EDA, because it hands the platform a free, near-perfect pre-filter: the roughly 60\% of volume flowing through \code{PAYMENT}, \code{CASH\_IN}, and \code{DEBIT} can be routed around the expensive scoring-and-review path with essentially no fraud risk in this data, concentrating scarce review capacity on the two channels that actually carry it. We encode the prior as \code{is\_transfer}/\code{is\_cash\_out} indicators rather than a hard exclusion rule, for two reasons. First, it lets the model \emph{combine} type with amount, time, and destination-reuse signals - a large night-time \code{TRANSFER} into a reused mule account is far riskier than the type alone implies. Second, it degrades gracefully if fraudsters ever migrate: a hard-coded rule would become a permanent blind spot the moment the attack pattern drifts, whereas a weighted feature simply loses influence.
+
 \section{Amount distribution and outliers}
 
 Transaction amounts are heavy-tailed: median $\approx 74{,}872$, the 99.9th percentile
@@ -568,6 +590,10 @@ larger amounts (Figure~\ref{fig:amount}). Binning amount into deciles
 \label{fig:amount}
 \end{figure}
 
+The rightward skew of fraud amounts reflects the attacker's optimisation, not chance. Each fraudulent attempt carries a roughly fixed cost - a compromised credential, a mule account, exposure to detection - so the rational fraudster maximises value extracted per attempt and pushes towards large transfers. This is exactly what the decile curve shows: the fraud rate climbs about 30-fold, from roughly 0.02\% in the low deciles to 0.69\% in the top decile. Yet the same figure carries the opposite warning - even in that top decile about 99.3\% of transactions are legitimate, so amount \emph{shifts the prior} without \emph{separating} the classes. That is why amount is the strongest linear correlate of fraud and still weak in absolute terms ($r \approx 0.077$, with $|r| < 0.08$ for every feature): on its own it would drown genuine fraud in high-value legitimate commerce.
+
+The decisive role of amount is therefore not as a standalone rule but as the bridge between the feature space and the cost model. It enters the pipeline twice. As an input it is log-transformed (\code{log1p}) to compress a tail spanning a 74{,}872 median to a 92.4M maximum, so a handful of extreme values cannot dominate the fit. As a misclassification weight it drives the objective directly, since a false negative costs the full amount ($c_{FN} = 1.0 \times \text{amount}$) while a false positive costs a flat 25 and a manual review just 3. Because fraud \emph{density} and economic \emph{stakes} both peak in the large-amount region, data and objective agree: the model should be most aggressive precisely where the biggest losses hide. With a break-even of only 25 currency units against fraud amounts in the hundreds of thousands, blocking widely on a large-amount \code{TRANSFER} is the economically correct call even at low precision.
+
 \section{Temporal patterns}
 
 Fraud has a striking diurnal signature (Figure~\ref{fig:time}, left): the fraud rate peaks
@@ -583,6 +609,10 @@ treat it as such.
 \caption{Fraud rate by hour of day (left) and by simulation day (right).}
 \label{fig:time}
 \end{figure}
+
+The nocturnal peak - a fraud rate near 22\% in the 04:00--05:00 window against a near-zero daytime baseline - reads as a behavioural signature of organised, automated attack rather than opportunistic misuse. Scripts fire in the small hours because monitoring is thinnest, fraud-operations staff are off-shift, and, critically, the genuine account-holder is asleep and unlikely to notice or reverse the transaction before the funds are cashed out. The magnitude of the effect sets time apart from every other signal: \code{is\_night} lifts the fraud rate from 0.10\% to 1.77\% - about $17\times$ - whereas the device, email, mismatch, and country flags manage only a $2.5$--$3.5\times$ lift. That contrast is itself informative: the context flags are deliberately noisy proxies (engineered with \code{reveal\_rate} 0.55 and \code{legit\_noise} 0.04, so their distributions overlap), while time-of-day is a near-orthogonal behavioural tell the attacker cannot cheaply disguise without surrendering the low-monitoring advantage that motivated the night attack in the first place.
+
+For deployment this makes time-of-day an almost ideal risk multiplier: it is free to compute, always available at authorization time, and tamper-resistant in a way that device fingerprints and email domains are not. The natural design lets \code{is\_night} and the underlying hour modulate risk in interaction with type and amount rather than act alone. The temporal panel also delivers a discipline lesson: the day-30 spike to a 100\% fraud rate is a low-volume simulation artefact - a handful of rows - and treating it as signal would teach the model a spurious rule. Recognising when \emph{not} to trust a rate is as much a part of the analysis as the nocturnal pattern we keep.
 
 \section{Synthetic risk flags}
 
@@ -616,6 +646,10 @@ reveal/noise mechanism is visible and intended.
 \label{tab:flags}
 \end{minipage}
 
+Each account/device flag corresponds to a recognisable fraud tell, and the size of its lift tracks how directly the flag exposes adversarial intent. \code{shipping\_billing\_mismatch} carries the largest identity-flag lift ($0.106\%$ to $0.353\%$, roughly $3.3\times$) because a ship-to address that diverges from the billing address is the operational signature of reshipping and drop-address schemes, where goods must physically reach someone other than the account holder. \code{is\_disposable\_email} ($0.116\%$ to $0.365\%$) reflects deliberate non-traceability: a throwaway inbox is cheap to mint and is favoured by synthetic-identity and bulk-fraud rings that expect the account to be burned. \code{is\_new\_device} ($0.102\%$ to $0.268\%$) is the classic account-takeover fingerprint - an unrecognised device authenticating against an existing account - while \code{high\_risk\_country} ($0.114\%$ to $0.320\%$) encodes the geographic concentration of organised fraud origination. The lone outlier is \code{is\_night} ($0.100\%$ to $1.773\%$, $\approx17\times$), a temporal rather than identity signal treated separately in the temporal-patterns section.
+
+The analytically important point is not any single lift but its ceiling. Even the strongest identity flag leaves the flagged population overwhelmingly legitimate - a $0.353\%$ post-flag fraud rate still means well over $99\%$ of flagged transactions are genuine - so no flag on its own is remotely decisive; conditioning on it barely moves an individual transaction from ``unlikely fraud'' to ``still unlikely fraud''. This overlap is engineered on purpose (reveal rate $r=0.55$, legit noise $n=0.04$), but it is engineered to mirror reality: in production no single rule convicts, because a fraudster can defeat any one check in isolation. The discriminative signal lives in the \emph{joint} configuration - a new device \emph{and} a disposable email \emph{and} an address mismatch together - which a rule-based scorecard cannot weigh but a multivariate model can. These marginals therefore justify a learned model over a threshold on any single flag, and they set up the non-linearity thesis developed below.
+
 \vspace{0.3cm}
 Numeric context fields tell the same story (Figure~\ref{fig:numeric}): fraudulent accounts
 are younger, sit farther from their billing IP, and have more failed payment attempts - but
@@ -627,6 +661,10 @@ the distributions overlap heavily, so no single field is a silver bullet.
 \caption{Numeric context by class: account age, IP–billing distance, failed attempts.}
 \label{fig:numeric}
 \end{figure}
+
+The numeric context fields sketch two distinct fraud archetypes rather than one. Fraudulent transactions come from accounts that are younger on average, sit farther from their billing IP, and carry more failed payment attempts; read as a pattern these point to (i) \emph{account-takeover}, where an otherwise ordinary account is suddenly operated from an implausible distance on unfamiliar hardware, and (ii) \emph{purpose-built fraud accounts} that are freshly minted and lightly aged. The elevated \code{ip\_billing\_distance\_km} is the geographic-implausibility tell of a remote attacker using stolen credentials; the extra \code{num\_failed\_payment\_attempts} is the residue of card-testing and credential-stuffing, where an adversary iterates over stolen instruments before one succeeds; and the lower \code{account\_age\_days} reflects both the youth of disposable fraud accounts and the recency skew of compromised ones.
+
+Crucially, every one of these distributions overlaps its legitimate counterpart heavily, so none functions as a univariate classifier: the fraud and legitimate densities differ in their means but share almost all of their support. A hard threshold on account age or IP distance would either miss most fraud or drown in false positives. This is the continuous-valued version of the same lesson the binary flags teach - each field is a weak, noisy nudge to the posterior, informative only in combination - and it is precisely why the modelling stage relies on an interaction-aware learner rather than any hand-set numeric cutoff.
 
 \section{Balance signature - an early leakage warning}
 \label{sec:balance}
@@ -668,6 +706,10 @@ looks near-perfect offline but cannot be deployed. We therefore split features i
 \label{tab:balancesig}
 \end{minipage}
 
+The balance signature is the report's most instructive \emph{negative} result. A single feature, \code{abs\_errorBalanceOrig}, reaches a directionless AUC of $0.921$, and \code{orig\_drained} fires for $97.6\%$ of frauds against only $23.8\%$ of legitimate transactions - numbers that would ordinarily be celebrated. Here they are a warning. The mechanism is that both features are reconciled from the balance \emph{after} the transaction settles: draining the origin account is not so much a predictor of fraud as a near-definitional \emph{consequence} of it, since exfiltration is the fraudster's objective. A feature that is an effect of the label, computed from post-event state, will always look near-perfect in an offline table - this is exactly the trap that target leakage sets.
+
+The discipline this enforces is that offline AUC is not the deployment test - authorization-time availability is. At the instant the platform must decide, \code{newbalanceOrig} does not yet exist because the money has not moved. A model that leans on it cannot be served no matter how high its held-out score, and shipping it would yield a system that evaluates perfectly and catches nothing in production. This is why the balance fields are quarantined into a reference-only track and the deployable model is built exclusively from signals knowable \emph{before} settlement - and why the honest $0.907$ is headlined ahead of the leaky $\approx1.0$.
+
 \section{Destination reuse and the mule pattern}
 
 Although origin accounts are single-use, \emph{destination} accounts are frequently reused:
@@ -701,6 +743,10 @@ features (Module 4).
 \label{tab:destreuse}
 \end{minipage}
 
+The destination-reuse curve is the clearest causal signal in the data. Fraud rate climbs monotonically with how often a destination account has been seen - $0.118\%$ at single use, $0.938\%$ at 2--3, $1.041\%$ at 4--10, and $1.692\%$ at 11+, an escalation of roughly $14\times$. This is the fan-in geometry of money mules: a fraud ring funnels proceeds from many compromised origins into a small set of collector accounts, so a destination's accumulated inbound count is effectively a proxy for ``this account is a collection point.'' The asymmetry with the origin side is the tell - origin accounts are essentially single-use (each victim or stolen credential is exercised once), so per-origin velocity carries no signal, whereas the destination is the reusable asset of the operation and therefore where the network signal concentrates.
+
+Analytically this reframes a transaction-level problem as a network-level one, and it dictates how the feature must be built. Because the fraud rate rises with reuse, the naive move - counting a destination's \emph{total} appearances - would leak the future into the present, since a destination's final tally reflects transactions that have not yet occurred at authorization time. The deployable version is a \emph{past-only} running aggregate: how many times, and from how many distinct senders, this destination has been seen \emph{so far}. That converts a retrospective mule property into a causal, serve-time feature, and it is why destination history is engineered with cumulative sums computed before the chronological split rather than as a simple group-by count.
+
 \section{Channels and correlations}
 
 Browser and OS carry essentially no fraud signal (rates flat at $\approx$0.12–0.13\%), as
@@ -727,6 +773,12 @@ phenomenon.
 \end{subfigure}
 \caption{Channel context and linear correlations with the target.}
 \end{figure}
+
+The channel fields split cleanly into noise and signal, and both halves are informative about data quality. Browser and device OS sit flat at the base rate ($\approx0.12$--$0.13\%$), which is exactly the correct result: the generator drew them uniformly and independently of the label, so any lift here would have signalled accidental leakage. Their flatness is a \emph{negative control} that validates the synthetic hygiene of the contextual layer and licenses dropping them as model inputs. Billing country, by contrast, carries genuine geo-risk - the high-risk set (NG/ID/CN/RU) runs at $\approx0.32\%$ against $\approx0.11\%$ elsewhere - consistent with the real-world concentration of organised fraud in specific jurisdictions, and it is retained (frequency-encoded) rather than discarded.
+
+The correlation panel delivers the report's central analytical bridge. Every linear correlation with the target is weak - all $|r|<0.08$, with \code{amount} leading at just $0.077$ - which, read naively, would suggest the features barely relate to fraud at all. The opposite is true, and the discrepancy is itself the finding: a weak \emph{linear} association is not weak \emph{signal}, it is signal that is not additive. Fraud here is conditional. A large amount is unremarkable for a seasoned account settling with a familiar destination but alarming for a young account transferring at 4am to a heavily-reused mule; the same feature value flips meaning depending on the others. Pearson correlation, which measures a single monotone main effect, is structurally blind to exactly this kind of interaction.
+
+This is why the EDA points directly at a model class. If fraud were linearly separable a logistic regression would recover most of it and the correlations would be strong; the fact that they are not predicts that a linear model will underperform and that a learner able to represent conjunctions - recursive-partitioning trees - will not. The modelling stage should therefore be read as a test of this hypothesis rather than a routine bake-off: the weak marginals observed here are the reason gradient-boosted trees are the expected winner well before any model is trained.
 
 \begin{keybox}
 \textbf{EDA takeaways.} (1) Extreme imbalance $\Rightarrow$ AUC-PR + cost-based threshold.
@@ -1064,6 +1116,10 @@ selected on validation). XGBoost is selected for deployment.}
 \label{tab:realistic}
 \end{table}
 
+The three-way model gap is best read as a direct measurement of \emph{where} the fraud signal lives. The EDA established that every linear correlation with the label is weak ($|r|<0.08$) while risk concentrates in \emph{conjunctions} - a large amount \emph{and} at night \emph{and} to a frequently reused destination. Logistic Regression is additive by construction: it can weight each signal but cannot represent the AND that makes them jointly damning, so on the deployable features it tops out at 0.587 AUC-PR. The 0.32-point gap up to XGBoost's 0.907 is precisely the portion of the signal that is interaction-driven and therefore structurally invisible to a linear model. Recursive tree splits encode exactly those conjunctions; Random Forest does too, which is why it reaches 0.812, but XGBoost's sequential residual-fitting extracts more discriminative structure from the extreme minority class than Random Forest's independent bagging, accounting for the remaining $\approx$0.10-point margin.
+
+Logistic Regression's headline recall of $\approx$1.0 is a trap, not a triumph. Unable to isolate fraud by interaction, the only way it can cover the positives is to slide its threshold down until it flags almost everything - which is exactly what a precision of 0.025 (roughly one true fraud per forty flags) reveals. That is an operationally dead policy: the review queue would drown. XGBoost reaches comparable recall (0.981) while holding precision an order of magnitude higher, because it can be confident about \emph{which} transactions are risky rather than merely that some are. Two further properties seal the choice. First, \code{scale\_pos\_weight}$\approx$1{,}221 lets the booster take the 774:1 imbalance seriously without discarding or synthesising data. Second, its native tolerance of missing values matters operationally: a live authorization request has no destination history (those features are simply absent at request time), and a tree routes around a missing split where the scaled linear model would need imputation that distorts the very tail in which the fraud lives.
+
 \subsection{Feature-group ablation (XGBoost)}
 
 Holding the model fixed at XGBoost and varying the feature group
@@ -1092,6 +1148,14 @@ justification for the deployed feature set.
 reference only - \emph{not} deployable. The deployable optimum is \code{realistic}.}
 \label{tab:ablation}
 \end{table}
+
+The ablation makes the cost of honesty measurable rather than rhetorical. Holding the model fixed as XGBoost and swapping only the feature group, test AUC-PR falls from the leaky groups' $\approx$1.0 to the deployable \code{realistic} group's 0.907 - a \emph{leakage tax} of roughly nine AUC-PR points. That gap is not a modelling weakness; it is the exact quantity of apparent skill the leaky model was borrowing from information the platform does not possess at the moment it must decide. The two numbers are also not on equal footing. A model that scores 1.0 on post-settlement balance fields cannot be computed at authorization time at all, so its \emph{deployable} discriminative power is effectively zero: it never runs. Measured against what can actually be shipped, the 0.907 model is therefore not nine points worse than the leaky benchmark - it is the only model that exists.
+
+Crucially, the tax is paid almost entirely in ranking sharpness and precision, not in the business objective. Even stripped of every balance feature, the deployable model still intercepts 99.91\% of fraudulent money (Table~\ref{tab:deployed}) - statistically indistinguishable from the leaky upper bound's loss-avoided. What the platform forfeits by refusing leakage is thus not caught fraud but review efficiency: the honest model routes a few more borderline cases to human review to reach nearly the same interception. This reframes the leaky-versus-deployable split from a painful accuracy sacrifice into a cheap insurance premium - a handful of AUC-PR points and some extra queue load - bought in exchange for a model that does not silently collapse the instant it faces a live transaction whose post-transaction balances are, by definition, still unknown.
+
+\begin{keybox}
+\textbf{The leakage tax.} The distance from the leaky $\approx$1.0 AUC-PR to the deployable 0.907 is the price of using \emph{only} information available at authorization time - about nine AUC-PR points. It is a bargain: the honest model still avoids 99.91\% of fraud loss. An offline score of 1.0 that cannot be computed when the decision is actually made is worth exactly nothing; a 0.907 that runs at authorization time is worth everything.
+\end{keybox}
 
 \subsection{Selected model - the deployed configuration}
 
@@ -1122,6 +1186,10 @@ Loss avoided & 99.98\% & 99.91\%\\
 \label{tab:deployed}
 \end{table}
 
+The validation$\to$test movement rewards a careful reading, because a model that scores \emph{higher} on the future (0.907) than on validation (0.806) can look suspicious at first glance. It is not overfitting; it is a property of the metric under a shifting base rate. AUC-PR's no-skill floor equals the positive prevalence, and the test window carries a materially higher fraud rate than the validation window (Table~\ref{tab:split}). A denser positive class mechanically lifts AUC-PR even when the underlying ranking is unchanged - and the near-identical ROC-AUC across folds (0.999), which is prevalence-invariant, confirms exactly that: the model's ability to \emph{order} transactions by risk did not degrade going forward. The AUC-PR gain reflects a later, more-separable fraud regime, not a better-fit model.
+
+This is why the chronological, predict-the-future split is the only defensible evaluation here. A random split would let the model train on transactions from the same hours - even the same reused destination accounts - that it is later scored on, leaking future information backwards and inflating every metric. Cutting on \code{step} forces training to precede scoring, so the destination-history features carry only genuine past behaviour and the reported numbers answer the question the business actually asks: given everything known up to now, how well will the model do on transactions it has never seen? The favourable val$\to$test move is then reassuring in the strongest possible sense - performance held up under real temporal non-stationarity rather than under a shuffled fantasy that quietly rehearses the answer.
+
 \subsection{Interpreting the operating point}
 
 At the chosen threshold on the test window the model flags 2.38\% of all transactions,
@@ -1131,6 +1199,10 @@ review, which the cost model accepts because the alternative - missing a six-fig
 is far costlier. Two thresholds are exposed downstream (Module 6): the review threshold
 (0.241) and a high-confidence auto-block threshold, enabling an \emph{allow / review / block}
 policy rather than a binary decision.
+
+The 17\% precision at threshold 0.241 is the single number most likely to be misread as failure, so it is worth deriving why it is optimal. Treat each decision as an expected cost. Allowing a transaction risks $p\times\text{amount}$ (missed-fraud cost $c_{FN}=1.0\times$amount); flagging it costs roughly $c_{FP}$ plus a review - about 25--28 currency units almost regardless of $p$. Blocking therefore pays off whenever $p\times\text{amount}>25$, the break-even of the coefficients in Eq.~\eqref{eq:cost}. Because the median fraud runs to hundreds of thousands, this inequality holds at fraud probabilities of a fraction of a percent. The cost structure literally \emph{instructs} the model to flag on the faintest suspicion attached to a large-value transaction, and low precision is the arithmetically correct response, not a defect. Reporting loss-avoided (99.91\%) and flagged-rate (2.38\%) beside precision is what keeps the picture honest: the model catches 98.1\% of fraud while touching only 2.38\% of traffic.
+
+What stops the threshold from collapsing to zero - the degenerate policy Logistic Regression fell into - is the review-labour term $c_{MR}$. Every flag consumes a scarce analyst, so the cost function charges for the queue itself; the 2.38\% flagged rate is the point at which the marginal review cost of one more flag just balances the marginal fraud it expects to catch. This ties the statistical operating point directly to an operational constraint: a precision of 17\% is affordable only because the queue can absorb roughly one flagged transaction in forty-two, and it is why the downstream policy prioritises the queue by \emph{expected loss} (risk $\times$ amount). When capacity binds, scarce analyst time should chase the largest exposures first rather than the highest scores - precision is a review-capacity problem, not a modelling ceiling.
 
 \begin{warnbox}
 \textbf{Honesty note.} We deliberately do \emph{not} headline the AUC-PR$\approx$1.0
@@ -1174,6 +1246,10 @@ entry is dropped, the aggregate is computed from the survivors, and the response
 the API (single record, via \code{score\_record}) and the Streamlit batch (via
 \code{score\_batch}), so a transaction gets an identical verdict either way - train/serve
 parity by construction.
+
+The max-risk aggregation is more subtly engineered than ``take the most alarmed model.'' Read against the cost model, it applies a \emph{union} at the cheap decision boundary and reserves an intersection-like bar for the expensive one. Because any single model can escalate a case to \emph{review}, the ensemble's effective recall is at least that of its most sensitive member - exactly the bias the cost function wants, since a missed fraud is the costly error and a needless review is cheap. But escalation to \emph{block}, the expensive customer-facing action, is gated behind the shared 0.9 confidence floor of Eq.~\eqref{eq:decide}, so a model can force hard friction only when it is genuinely certain. The union therefore raises recall where being wrong is cheap (an extra review) while the high floor protects precision where being wrong is costly (a wrongful block). This is precisely why bundling the weak Logistic Regression alongside the stronger trees is defensible: it can only ever add reviews, never force a block on its own.
+
+The second benefit is availability under partial failure - a property a real-time authorization path cannot do without. A model that errors or times out must not be allowed to take the whole decision down, because failing open would wave fraud through while failing closed would block legitimate customers wholesale. Dropping the failed model, recomputing the aggregate from the survivors, and marking the response \code{degraded} converts a hard outage into a graceful, still-actionable verdict that carries its own audit trail. Combined with train/serve parity - the same \code{ensemble.py} path scores both the offline batch and the single live request - the ensemble is engineered less for a marginal metric gain than for the operational robustness a payment system actually requires at request time.
 
 \begin{keybox}
 \textbf{Reproducibility note.} All results in this chapter are the \textbf{full-data
@@ -1432,6 +1508,14 @@ routes ambiguity to humans - matching the cost model's high-recall, review-heavy
 point.
 \end{keybox}
 
+The brief's central policy question - which signals auto-block and which merely flag for review - is settled by the data's structure rather than by preference. Every signal available at authorization time overlaps heavily between fraud and legitimate traffic \emph{by construction}: the synthetic flags were generated with a reveal rate of 0.55 and a legit-noise of 0.04 precisely so that no clean separator can exist. The consequence is quantitative and decisive. The sharpest single flag, \code{is\_night}, lifts the fraud rate roughly seventeenfold (0.10\% $\to$ 1.77\%) - yet even conditioned on a night-time transaction, more than 98\% of transactions are still legitimate. The next-strongest flags (disposable email, shipping/billing mismatch, high-risk country, new device) each move the rate only from about 0.11\% to 0.27--0.37\%, a 2.5--3.5$\times$ lift that leaves the posterior fraud probability well under one percent. Auto-blocking on any one of these would therefore reject overwhelmingly good traffic; the reason-code lifts are genuine, but individually far too weak to justify hard friction.
+
+Certainty sufficient to auto-block emerges only after the model integrates many weak, overlapping signals into a calibrated posterior. The correlation analysis reports the same fact from the opposite side: no signal correlates with the target above $|r|=0.08$, yet the tree ensemble reaches a test AUC-PR of 0.907 - fraud here is a non-linear conjunction of individually unconvincing signals, not any single axis. The policy tiers follow directly. Auto-block is gated on \emph{score} certainty (any model $\ge$ the 0.9 block floor), a threshold on the model's integrated judgement and never on a raw input. The mid-band between each model's cost-tuned review threshold and the block floor - where the score is genuinely uncertain - is routed to a human, and it is exactly here that high-severity reason codes (multiple failed attempts, a large night-time transfer to a reused destination, a drained account) earn their place: they do not decide, they corroborate and explain, turning an opaque probability into an auditable narrative for the analyst and the regulator. The score decides; the reason codes justify.
+
+At the chosen operating point the model flags 2.38\% of a 6.36-million-transaction stream at a precision of 0.173 - roughly five false alarms for every genuine fraud. Human review capacity, not the classifier, is the binding constraint on how many of those flags can actually be worked, which recasts the queue as a scheduling problem: given a fixed number of analyst-hours, which flags earn the review? Ordering by score alone answers ``which is most likely fraud'' but treats a 90{,}000-unit fraud and a 90-million-unit fraud as equivalent - a mistake the cost model explicitly rejects, since a missed fraud costs the full amount lost ($c_{FN}=1.0\times$ amount).
+
+Ranking instead by \emph{expected loss} - risk score $\times$ amount - makes the queue order literally the expected value of the loss each flag represents, aligning the scarce review resource with the very cost function it exists to minimise. The data make this lever unusually powerful because risk and size compound: the top amount decile carries about a 0.69\% fraud rate (roughly $30\times$ the low deciles) \emph{and} the largest per-case exposure, so expected loss concentrates on the same transactions from both directions. With total fraud exposure of 12.06 billion units spread across only 8{,}213 events, a small fraction of large-amount cases dominates recoverable loss. This is where the analytics create the most business value: the model identifies what is \emph{risky}, but expected-loss prioritisation decides what is \emph{worth a human's finite time}, maximising loss avoided per analyst-hour rather than mere hit-count.
+
 \section{Limitations}
 
 \begin{itemize}[nosep,leftmargin=1.4em]
@@ -1448,6 +1532,8 @@ point.
         live demo; a production retrain would instead rely on real labelled feedback, which
         arrives with delay (chargeback / confirmation lag) and needs its own validation.
 \end{itemize}
+
+The operating precision of 0.173 should not be mistaken for a modelling weakness. With a 774:1 base rate and a break-even at 25 currency units - trivially below the median fraud of tens of thousands - even a Bayes-optimal detector is compelled to cast a wide net, because blocking is simply cheaper than the loss it prevents. Precision here is thus an operational dial set by how much review capacity the business funds, not a fixed property of the classifier, and the sharper question is not ``how do we raise precision'' but ``how many analyst-hours are worth buying'' - which the expected-loss ranking answers directly by exposing the diminishing recoverable exposure as the queue is worked downward. Stating precision alongside that capacity constraint, rather than reporting it as if it were free to improve, is the honest way to frame the fraud/friction trade-off.
 
 \section{Future work}
 
@@ -1493,6 +1579,12 @@ webhook alerting. The result is not just a classifier but a complete, auditable 
 product: it scores transactions, explains its flags with reason codes, prices its decisions
 in currency, and watches itself for drift - closing the loop the brief asks for. The one
 remaining task is to publish the public live link and attach demo screenshots.
+
+Stepping back from the pipeline, the data taught us a coherent portrait of this fraud, and each finding forced a specific design choice rather than a generic one. Fraud is \emph{rare} (0.129\%, a 774:1 imbalance) - so the model is tuned against a business cost function and judged by AUC-PR, not the accuracy the majority class would trivially win. It is \emph{nocturnal} (0.10\% by day rising to 1.77\% at night, peaking near 22\% in the 04:00--05:00 window) and \emph{large-amount} (a 0.69\% rate in the top decile, about $30\times$ the bottom) - so time-of-day and log-scaled amount became core features and the review queue is ranked by expected loss. It flows exclusively through \code{TRANSFER} and \code{CASH\_OUT}, the two exfiltration channels, with literally zero fraud in \code{PAYMENT}, \code{CASH\_IN}, or \code{DEBIT} - so a cheap structural pre-filter removes most of the stream before scoring. It is \emph{channelled into reused mule accounts}, the destination fraud rate climbing monotonically from 0.118\% at first use to 1.692\% beyond eleven reuses - so destination-reuse history became a feature and graph structure is the clearest avenue for future gains. And it is \emph{non-linear}: no signal correlates with the target above $|r|=0.08$, yet the tree ensemble reaches 0.907 AUC-PR while logistic regression manages only 0.587 - so the deployed model is a gradient-boosted tree, chosen because the phenomenon lives in the interactions, not the margins.
+
+\begin{keybox}
+\textbf{The one-sentence lesson.} Fraud in this data is rare, nocturnal, large, funnelled through \code{TRANSFER}/\code{CASH\_OUT} into reused mule accounts, and invisible to any single signal - so the winning system is not the most \emph{accurate} classifier but the one that integrates weak, overlapping evidence into a calibrated score, respects authorization-time causality, and spends its scarce human review where \emph{expected loss} is largest.
+\end{keybox}
 
 %==============================================================================
 \appendix
