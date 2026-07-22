@@ -165,8 +165,8 @@ encode the label but are unknown at authorization time; models trained on them r
 artificial AUC-PR of $\approx 1.0$. We exclude them from deployment and instead ship a
 model trained only on authorization-time signals. The deployable model - \textbf{XGBoost}
 on the 44-feature \code{realistic} group - achieves a held-out test \textbf{AUC-PR of
-0.908}, \textbf{ROC-AUC of 0.999}, \textbf{recall of 96.8\%}, and avoids \textbf{99.8\%}
-of fraud loss while flagging only \textbf{1.6\%} of transactions.
+0.907}, \textbf{ROC-AUC of 0.999}, \textbf{recall of 98.1\%}, and avoids \textbf{99.9\%}
+of fraud loss while flagging only \textbf{2.4\%} of transactions.
 
 The model is then productionised as a complete analytics product: a \textbf{three-model
 ensemble} (Logistic Regression, Random Forest, XGBoost) served behind a FastAPI
@@ -1042,9 +1042,9 @@ Module 8.
 
 Table~\ref{tab:realistic} compares the three models on the deployable \code{realistic}
 group. \textbf{XGBoost} is the clear winner on every axis that matters: the highest test
-AUC-PR (0.908) and F1 (0.399), while still catching 96.8\% of fraud and avoiding 99.8\% of
+AUC-PR (0.907) and F1 (0.294), while still catching 98.1\% of fraud and avoiding 99.9\% of
 loss. Logistic Regression confirms the EDA's hint - a linear model cannot separate this data
-(test AUC-PR 0.586) and compensates with an untenable flag rate. Random Forest is
+(test AUC-PR 0.587) and compensates with an untenable flag rate. Random Forest is
 competitive but trails XGBoost.
 
 \begin{table}[h]
@@ -1054,9 +1054,9 @@ competitive but trails XGBoost.
 \toprule
 \textbf{Model (realistic)} & \textbf{AUC-PR} & \textbf{ROC-AUC} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} & \textbf{Loss avd.}\\
 \midrule
-\textbf{XGBoost} & \textbf{0.908} & 0.999 & 0.251 & 0.968 & \textbf{0.399} & 99.82\%\\
-Random Forest & 0.812 & 0.970 & 0.086 & 0.946 & 0.158 & 99.57\%\\
-Logistic Regression & 0.586 & 0.990 & 0.025 & 0.997 & 0.049 & 99.98\%\\
+\textbf{XGBoost} & \textbf{0.907} & 0.999 & 0.173 & 0.981 & \textbf{0.294} & 99.91\%\\
+Random Forest & 0.812 & 0.974 & 0.084 & 0.953 & 0.155 & 99.60\%\\
+Logistic Regression & 0.587 & 0.990 & 0.025 & 0.997 & 0.049 & 99.98\%\\
 \bottomrule
 \end{tabular}
 \caption{Held-out \emph{test} metrics on the deployable \code{realistic} group (threshold
@@ -1071,7 +1071,7 @@ Holding the model fixed at XGBoost and varying the feature group
 (\code{base}, \code{all}) reach an artificial test AUC-PR of $\approx$1.0 - driven entirely
 by the post-transaction balance fields. Among deployable groups, neither destination history
 alone (\code{dest}) nor context alone (\code{synth}) is sufficient; only their combination
-in \code{realistic} yields strong, honest performance (0.908). This is the core empirical
+in \code{realistic} yields strong, honest performance (0.907). This is the core empirical
 justification for the deployed feature set.
 
 \begin{table}[h]
@@ -1083,9 +1083,9 @@ justification for the deployed feature set.
 \midrule
 \code{base} & yes & 18 & 1.000$^{\dagger}$ & 0.9995 & 99.99\%\\
 \code{all}  & yes & 50 & 1.000$^{\dagger}$ & 0.9995 & 99.99\%\\
-\code{realistic} & no & 44 & \textbf{0.908} & 0.968 & 99.82\%\\
-\code{synth} & no & 21 & 0.255 & 0.971 & 96.99\%\\
-\code{dest}  & no & 16 & 0.010 & 0.997 & 99.59\%\\
+\code{realistic} & no & 44 & \textbf{0.907} & 0.981 & 99.91\%\\
+\code{synth} & no & 21 & 0.243 & 0.961 & 96.21\%\\
+\code{dest}  & no & 16 & 0.009 & 0.998 & 99.77\%\\
 \bottomrule
 \end{tabular}
 \caption{XGBoost across feature groups. $^{\dagger}$Leaky groups are an upper-bound
@@ -1096,8 +1096,8 @@ reference only - \emph{not} deployable. The deployable optimum is \code{realisti
 \subsection{Selected model - the deployed configuration}
 
 The saved bundle (\code{models/fraud\_model.joblib}) is \textbf{XGBoost on \code{realistic}
-(44 features)} with a validation-selected threshold of \textbf{0.380}. Its full profile is
-in Table~\ref{tab:deployed}. The validation$\to$test AUC-PR change (0.816$\to$0.908) is
+(44 features)} with a validation-selected threshold of \textbf{0.241}. Its full profile is
+in Table~\ref{tab:deployed}. The validation$\to$test AUC-PR change (0.806$\to$0.907) is
 favourable and consistent with the higher, more separable fraud regime in the later test
 window; ROC-AUC is essentially identical across folds (0.999), indicating stable ranking.
 
@@ -1108,34 +1108,34 @@ window; ROC-AUC is essentially identical across folds (0.999), indicating stable
 \toprule
 \textbf{Metric} & \textbf{Validation} & \textbf{Test}\\
 \midrule
-AUC-PR & 0.816 & 0.908\\
-ROC-AUC & 0.9992 & 0.9988\\
-Operating threshold & \multicolumn{2}{c}{0.380 (selected on validation)}\\
-Precision & 0.045 & 0.251\\
-Recall & 0.984 & 0.968\\
-F1 & 0.086 & 0.399\\
-Flagged rate & 1.29\% & 1.62\%\\
-Loss avoided & 99.97\% & 99.82\%\\
+AUC-PR & 0.806 & 0.907\\
+ROC-AUC & 0.9990 & 0.9987\\
+Operating threshold & \multicolumn{2}{c}{0.241 (selected on validation)}\\
+Precision & 0.029 & 0.173\\
+Recall & 0.989 & 0.981\\
+F1 & 0.056 & 0.294\\
+Flagged rate & 2.03\% & 2.38\%\\
+Loss avoided & 99.98\% & 99.91\%\\
 \bottomrule
 \end{tabular}
-\caption{Deployed model: XGBoost / \code{realistic} / 44 features / threshold 0.380.}
+\caption{Deployed model: XGBoost / \code{realistic} / 44 features / threshold 0.241.}
 \label{tab:deployed}
 \end{table}
 
 \subsection{Interpreting the operating point}
 
-At the chosen threshold on the test window the model flags 1.62\% of all transactions,
-catches 96.8\% of frauds, and intercepts 99.8\% of the fraudulent money. Precision is 25\%
-by design (Section~\ref{sec:cost}): three of every four flags are false alarms sent to
+At the chosen threshold on the test window the model flags 2.38\% of all transactions,
+catches 98.1\% of frauds, and intercepts 99.9\% of the fraudulent money. Precision is 17\%
+by design (Section~\ref{sec:cost}): roughly five of every six flags are false alarms sent to
 review, which the cost model accepts because the alternative - missing a six-figure fraud -
 is far costlier. Two thresholds are exposed downstream (Module 6): the review threshold
-(0.380) and a high-confidence auto-block threshold, enabling an \emph{allow / review / block}
+(0.241) and a high-confidence auto-block threshold, enabling an \emph{allow / review / block}
 policy rather than a binary decision.
 
 \begin{warnbox}
 \textbf{Honesty note.} We deliberately do \emph{not} headline the AUC-PR$\approx$1.0
 achievable with balance features. Those numbers are real but non-deployable; reporting them
-as the result would be misleading. The deployable 0.908 is the number the business can
+as the result would be misleading. The deployable 0.907 is the number the business can
 actually rely on at authorization time.
 \end{warnbox}
 
@@ -1176,13 +1176,12 @@ the API (single record, via \code{score\_record}) and the Streamlit batch (via
 parity by construction.
 
 \begin{keybox}
-\textbf{Demo vs.\ reference build.} The results above are the reference \textbf{full-data
-(6.36M-row)} build. For a free-tier live demo (Chapter~\ref{ch:m6}) the same pipeline is
-rebuilt on a committed \textbf{100k-row synthetic stand-in}
-(\code{data/processed/transactions\_context.parquet}, $\approx$9\,MB) so the hosted app boots
-in seconds and can even retrain in-browser; on that small, easily separable sample the
-\code{realistic} models score near-perfectly, which is expected and is \emph{not} the headline
-result. The full-data 0.908 AUC-PR remains the reference figure of merit.
+\textbf{Reproducibility note.} All results in this chapter are the \textbf{full-data
+(6.36M-row)} build, and the deployed app (Chapter~\ref{ch:m6}) scores on that same build.
+The trained ensemble bundle ($\approx$60\,MB) is committed to git so the app works
+immediately after clone, but the processed feature dataset ($\approx$526\,MB on full PaySim)
+exceeds GitHub's 100\,MB limit and is regenerated locally by the data pipeline; the
+analytics pages that need the full population rebuild it on first run.
 \end{keybox}
 
 %==============================================================================
@@ -1291,8 +1290,9 @@ port. To keep the live API Tester working without a second port,
 \code{127.0.0.1:8000} inside the container; the app calls it \emph{server-side} over
 localhost, so the browser only ever talks to Streamlit (and if a local \code{uvicorn} is
 already running, the open port is detected and reused). Deployment then reduces to: commit the
-runtime artefacts (the ensemble bundle, the 9\,MB synthetic stand-in, and the preview CSV,
-kept in git via \code{.gitignore} exceptions), point Streamlit Cloud at
+runtime artefacts (the $\approx$60\,MB ensemble bundle and the preview CSV, kept in git via
+\code{.gitignore} exceptions; the $\approx$526\,MB processed dataset exceeds GitHub's limit and
+is rebuilt locally), point Streamlit Cloud at
 \code{app/streamlit\_app.py}, and let \code{requirements.txt} and \code{packages.txt}
 (\code{libgomp1} for XGBoost) install automatically.
 
@@ -1442,9 +1442,9 @@ point.
         (Section~\ref{sec:cost}), and a sensitivity sweep is still recommended.
   \item Operating precision is low \emph{by design}; in production it is bounded by review
         capacity, an operational constraint that should be modelled explicitly.
-  \item The hosted demo runs on a 100k synthetic stand-in and can retrain on fresh seeds, so
-        its live numbers are optimistic and volatile; the full-data 0.908 AUC-PR is the
-        reference result.
+  \item In-app retraining adapts on freshly generated, current-distribution data for the
+        live demo; a production retrain would instead rely on real labelled feedback, which
+        arrives with delay (chargeback / confirmation lag) and needs its own validation.
 \end{itemize}
 
 \section{Future work}
@@ -1480,8 +1480,8 @@ monitored deployment. The project's distinctive contribution is methodological r
 realistic constraint: by separating leaky post-transaction signals from deployable
 authorization-time signals, we avoid the near-perfect-but-useless result that balance
 features invite, and instead deliver a model the business can actually run. The reference
-XGBoost model reaches a test AUC-PR of 0.908, recall of 96.8\%, and avoids 99.8\% of fraud
-loss while flagging only 1.6\% of transactions - an operating point chosen not by accuracy
+XGBoost model reaches a test AUC-PR of 0.907, recall of 98.1\%, and avoids 99.9\% of fraud
+loss while flagging only 2.4\% of transactions - an operating point chosen not by accuracy
 but by an explicit business cost function.
 
 That model is productionised as a three-model max-risk ensemble behind a real-time scoring
@@ -1517,22 +1517,22 @@ on validation).}\label{tab:fullresults}\\
 \endhead
 \bottomrule
 \endfoot
-Logistic Reg. & base & yes & 18 & 0.533 & 0.774 & 0.119 & 0.993 & 0.212 & 98.85\%\\
+Logistic Reg. & base & yes & 18 & 0.523 & 0.774 & 0.119 & 0.992 & 0.213 & 98.85\%\\
 Logistic Reg. & dest & no & 16 & 0.001 & 0.011 & 0.004 & 0.998 & 0.008 & 99.94\%\\
-Logistic Reg. & synth & no & 21 & 0.064 & 0.217 & 0.010 & 1.000 & 0.020 & 100.0\%\\
-Logistic Reg. & realistic & no & 44 & 0.265 & 0.586 & 0.025 & 0.997 & 0.049 & 99.98\%\\
-Logistic Reg. & all & yes & 50 & 0.612 & 0.853 & 0.114 & 0.989 & 0.205 & 98.85\%\\
+Logistic Reg. & synth & no & 21 & 0.065 & 0.217 & 0.010 & 1.000 & 0.020 & 100.0\%\\
+Logistic Reg. & realistic & no & 44 & 0.249 & 0.587 & 0.025 & 0.997 & 0.049 & 99.98\%\\
+Logistic Reg. & all & yes & 50 & 0.604 & 0.853 & 0.114 & 0.989 & 0.205 & 98.85\%\\
 \midrule
 Random Forest & base & yes & 18 & 1.000 & 1.000 & 1.000 & 0.9995 & 0.9998 & 99.99\%\\
-Random Forest & dest & no & 16 & 0.001 & 0.006 & 0.006 & 0.804 & 0.011 & 83.50\%\\
-Random Forest & synth & no & 21 & 0.295 & 0.131 & 0.030 & 0.734 & 0.057 & 73.88\%\\
-Random Forest & realistic & no & 44 & 0.748 & 0.812 & 0.086 & 0.946 & 0.158 & 99.57\%\\
+Random Forest & dest & no & 16 & 0.001 & 0.006 & 0.006 & 0.803 & 0.012 & 85.54\%\\
+Random Forest & synth & no & 21 & 0.289 & 0.138 & 0.030 & 0.751 & 0.058 & 75.55\%\\
+Random Forest & realistic & no & 44 & 0.744 & 0.812 & 0.084 & 0.953 & 0.155 & 99.60\%\\
 Random Forest & all & yes & 50 & 1.000 & 1.000 & 1.000 & 0.9995 & 0.9998 & 99.99\%\\
 \midrule
 XGBoost & base & yes & 18 & 1.000 & 1.000 & 1.000 & 0.9995 & 0.9998 & 99.99\%\\
-XGBoost & dest & no & 16 & 0.001 & 0.010 & 0.004 & 0.997 & 0.008 & 99.59\%\\
-XGBoost & synth & no & 21 & 0.271 & 0.255 & 0.011 & 0.971 & 0.022 & 96.99\%\\
-\textbf{XGBoost} & \textbf{realistic} & \textbf{no} & \textbf{44} & \textbf{0.816} & \textbf{0.908} & \textbf{0.251} & \textbf{0.968} & \textbf{0.399} & \textbf{99.82\%}\\
+XGBoost & dest & no & 16 & 0.001 & 0.009 & 0.004 & 0.998 & 0.008 & 99.77\%\\
+XGBoost & synth & no & 21 & 0.268 & 0.243 & 0.011 & 0.961 & 0.022 & 96.21\%\\
+\textbf{XGBoost} & \textbf{realistic} & \textbf{no} & \textbf{44} & \textbf{0.806} & \textbf{0.907} & \textbf{0.173} & \textbf{0.981} & \textbf{0.294} & \textbf{99.91\%}\\
 XGBoost & all & yes & 50 & 1.000 & 1.000 & 1.000 & 0.9995 & 0.9998 & 99.99\%\\
 \end{longtable}}
 
