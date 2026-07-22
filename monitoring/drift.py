@@ -16,13 +16,13 @@ from __future__ import annotations
 import pathlib
 import sys
 
-import joblib
 import numpy as np
 import pandas as pd
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
-from features import build_features            # noqa: E402
+from infer import enrich                       # noqa: E402
+from ensemble import load_ensemble, score_all  # noqa: E402
 from config import MODELS, DATA_PROCESSED      # noqa: E402
 
 REPORTS = ROOT / "monitoring" / "reports"
@@ -48,6 +48,50 @@ def band(v: float) -> str:
     return "stable" if v < 0.10 else ("moderate" if v < RETRAIN_PSI else "SIGNIFICANT")
 
 
+def _fmt_num(x: float) -> str:
+    """Compact human-readable number: 1300 -> '1.3k', 165000 -> '165k', 480 -> '480'."""
+    ax = abs(float(x))
+    if ax >= 1e6:
+        v, u = x / 1e6, "M"
+    elif ax >= 1e3:
+        v, u = x / 1e3, "k"
+    else:
+        v, u = x, ""
+    return f"{v:.1f}".rstrip("0").rstrip(".") + u
+
+
+def distribution_frame(ref, cur, bins: int = 10) -> pd.DataFrame:
+    """Normalized reference vs current distribution for one feature, for the
+    overlaid histogram that explains a PSI value.
+
+    Discrete/low-cardinality features (e.g. is_new_device, hour_of_day) use one
+    bucket per value; continuous features use reference-quantile bins (the same
+    binning idea PSI uses). Columns: ['reference', 'current'] as fractions.
+    """
+    ref = np.asarray(ref, dtype=float)
+    cur = np.asarray(cur, dtype=float)
+    ref = ref[~np.isnan(ref)]
+    cur = cur[~np.isnan(cur)]
+    uniq = np.unique(ref)
+
+    if uniq.size <= min(bins, 12):
+        vals = np.unique(np.concatenate([uniq, np.unique(cur)])) if cur.size else uniq
+        r = np.array([(ref == v).mean() if ref.size else 0.0 for v in vals])
+        c = np.array([(cur == v).mean() if cur.size else 0.0 for v in vals])
+        idx = [str(int(v)) if float(v).is_integer() else f"{v:.2f}" for v in vals]
+        return pd.DataFrame({"reference": r, "current": c}, index=idx)
+
+    edges = np.unique(np.quantile(ref, np.linspace(0, 1, bins + 1)))
+    if edges.size < 3:
+        edges = np.unique(np.quantile(ref, [0.0, 0.5, 1.0]))
+    hist_edges = edges.astype(float).copy()
+    hist_edges[0], hist_edges[-1] = -np.inf, np.inf
+    r = np.histogram(ref, hist_edges)[0] / max(1, ref.size)
+    c = np.histogram(cur, hist_edges)[0] / max(1, cur.size)
+    labels = [f"{_fmt_num(edges[i])}–{_fmt_num(edges[i + 1])}" for i in range(len(edges) - 1)]
+    return pd.DataFrame({"reference": r, "current": c}, index=labels)
+
+
 def load():
     p = DATA_PROCESSED / "transactions_context.parquet"
     if not p.exists():
@@ -65,34 +109,59 @@ def inject_drift(df: pd.DataFrame, rng) -> pd.DataFrame:
     return d
 
 
+def _model_scores(df: pd.DataFrame, ensemble: dict) -> dict[str, np.ndarray]:
+    """Per-model prediction scores for a window (streaming: dest-history off)."""
+    enriched = enrich(df, use_dest_history=False)
+    return score_all(enriched, ensemble)
+
+
+def psi_map(ref: pd.DataFrame, cur: pd.DataFrame, ensemble: dict,
+            features=MONITORED) -> dict[str, float]:
+    """PSI for every monitored feature + one prediction row PER MODEL.
+
+    Rows: <feature> for each monitored input, and PREDICTION_SCORE_<key> for
+    each model in the ensemble. Reused by the CLI report and the dashboard.
+    """
+    out: dict[str, float] = {f: psi(ref[f].to_numpy(), cur[f].to_numpy()) for f in features}
+    s_ref = _model_scores(ref, ensemble)
+    s_cur = _model_scores(cur, ensemble)
+    for key in s_ref:
+        out[f"PREDICTION_SCORE_{key}"] = psi(s_ref[key], s_cur[key])
+    return out
+
+
+def compute_drift(ref: pd.DataFrame, cur: pd.DataFrame, ensemble: dict,
+                  features=MONITORED) -> pd.DataFrame:
+    """Single-scenario drift table: feature | psi | trigger. Used by the dashboard."""
+    m = psi_map(ref, cur, ensemble, features)
+    table = pd.DataFrame({"feature": list(m), "psi": [round(v, 3) for v in m.values()]})
+    table["trigger"] = table["psi"].map(band)
+    return table
+
+
+def split_reference_current(df: pd.DataFrame):
+    """Temporal split: earlier half = reference, later half = current."""
+    med = df["day_index"].median()
+    return df[df["day_index"] <= med], df[df["day_index"] > med], med
+
+
 def main():
     rng = np.random.default_rng(0)
     df = load()
-    bundle = joblib.load(MODELS / "fraud_model.joblib")
+    ensemble = load_ensemble(MODELS / "fraud_ensemble.joblib")
 
-    # temporal split: earlier vs later (natural, expected-stable baseline)
-    med = df["day_index"].median()
-    ref = df[df["day_index"] <= med]
-    cur_natural = df[df["day_index"] > med]
+    ref, cur_natural, med = split_reference_current(df)
     cur_drift = inject_drift(cur_natural, rng)
 
-    def score(x):
-        X = build_features(x)[bundle["features"]].astype(float)
-        return bundle["model"].predict_proba(X)[:, 1]
+    nat = psi_map(ref, cur_natural, ensemble)
+    dft = psi_map(ref, cur_drift, ensemble)
 
-    s_ref, s_nat, s_drift = score(ref), score(cur_natural), score(cur_drift)
-
-    rows = []
-    for f in MONITORED:
-        rows.append({
-            "feature": f,
-            "psi_natural": round(psi(ref[f].to_numpy(), cur_natural[f].to_numpy()), 3),
-            "psi_drifted": round(psi(ref[f].to_numpy(), cur_drift[f].to_numpy()), 3),
-        })
-    rows.append({"feature": "PREDICTION_SCORE",
-                 "psi_natural": round(psi(s_ref, s_nat), 3),
-                 "psi_drifted": round(psi(s_ref, s_drift), 3)})
-    table = pd.DataFrame(rows)
+    names = list(nat)   # monitored features, then PREDICTION_SCORE_<key> per model
+    table = pd.DataFrame({
+        "feature": names,
+        "psi_natural": [round(nat[n], 3) for n in names],
+        "psi_drifted": [round(dft[n], 3) for n in names],
+    })
     table["trigger_natural"] = table["psi_natural"].map(band)
     table["trigger_drifted"] = table["psi_drifted"].map(band)
 

@@ -58,6 +58,10 @@ FEATURE_GROUPS = {
 # are EXCLUDED from deployable bundle selection.
 LEAKY_GROUPS = {"base", "all"}
 
+# All models trained on this (non-leaky, authorization-time) group are packaged
+# into the deployable multi-model bundle served by the API and Streamlit.
+ENSEMBLE_GROUP = "realistic"
+
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Train and compare PaySim fraud classifiers.")
@@ -275,6 +279,7 @@ def main() -> None:
     specs = model_specs(selected_models, class_ratio(y_train))
     rows: list[dict[str, object]] = []
     best: dict[str, object] | None = None
+    ensemble_models: dict[str, dict[str, object]] = {}
 
     for spec in specs:
         for group in selected_groups:
@@ -327,6 +332,18 @@ def main() -> None:
                 "test_flagged_rate": test_metrics["flagged_rate"],
             }
             rows.append(row)
+            # Every model trained on the ensemble group is packaged for the
+            # multi-model API/Streamlit surface, each with its own matrix,
+            # feature columns, and cost-tuned threshold. `model` is a fresh
+            # clone per iteration, so storing it directly is safe.
+            if group == ENSEMBLE_GROUP:
+                ensemble_models[spec["key"]] = {
+                    "model": model,
+                    "model_name": spec["name"],
+                    "matrix": matrix,
+                    "features": X_train.columns.tolist(),
+                    "threshold": val_threshold_metrics["threshold"],
+                }
             # Deployable bundle is chosen only among non-leaky groups; leaky
             # groups (base/all) remain in the table as an upper-bound reference.
             if group not in LEAKY_GROUPS:
@@ -346,6 +363,8 @@ def main() -> None:
 
     bundle = {
         "model": best["model_obj"],
+        "model_name": best["model_name"],   # serving contract: api/main.py + streamlit read this
+        "model_key": best["model_key"],
         "transformer": best["transformer"],
         "feature_group": best["feature_group"],
         "leaky_excluded_from_selection": sorted(LEAKY_GROUPS),
@@ -361,6 +380,24 @@ def main() -> None:
     }
     MODELS.mkdir(exist_ok=True)
     joblib.dump(bundle, MODELS / "fraud_model.joblib")
+
+    # Multi-model deployable bundle: all models trained on ENSEMBLE_GROUP, sharing
+    # one transformer, each keeping its own matrix/features/threshold. Served by
+    # api/main.py and the Streamlit app via src/ensemble.py.
+    if ensemble_models:
+        ensemble_bundle = {
+            "transformer": transformer,
+            "feature_group": ENSEMBLE_GROUP,
+            "rule": "max-risk",
+            "models": ensemble_models,
+            "split_info": split_info,
+            "trained_at": datetime.now().isoformat(timespec="seconds"),
+        }
+        joblib.dump(ensemble_bundle, MODELS / "fraud_ensemble.joblib")
+        print(f"[m5] ensemble ({', '.join(ensemble_models)}) -> {MODELS / 'fraud_ensemble.joblib'}")
+    else:
+        print(f"[m5] WARNING: no models trained on {ENSEMBLE_GROUP!r}; "
+              "fraud_ensemble.joblib NOT written (include it via --feature-groups).")
 
     serializable_best = {k: v for k, v in best.items() if k not in {"model_obj", "transformer"}}
     write_report(results, serializable_best, split_info)

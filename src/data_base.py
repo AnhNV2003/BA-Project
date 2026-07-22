@@ -94,14 +94,24 @@ def make_standin(n: int = STANDIN_N_ROWS, seed: int = SEED) -> pd.DataFrame:
     )
     name_orig = rng.choice(pool, size=n)
 
-    # Destinations: merchants (M...) for PAYMENT, else customers (C...)
-    dest_customers = np.array(
-        ["C" + str(x) for x in rng.integers(10**8, 10**9, size=n)]
+    # Destinations: merchants (M...) for PAYMENT, else customers (C...).
+    # Draw from pools SMALLER than n so destinations recur, mirroring the origin
+    # pool above. Real PaySim reuses customer/mule and merchant destinations
+    # heavily; the causal dest-history features (dest_txn_count_so_far,
+    # dest_seen_before) and their M4/M5 guards depend on that reuse existing.
+    n_dest_customers = max(1, n // 10)   # ~ many txns per customer destination
+    n_dest_merchants = max(1, n // 20)   # merchants reused even more
+    dest_customer_pool = np.array(
+        ["C" + str(x) for x in rng.integers(10**8, 10**9, size=n_dest_customers)]
     )
-    dest_merchants = np.array(
-        ["M" + str(x) for x in rng.integers(10**8, 10**9, size=n)]
+    dest_merchant_pool = np.array(
+        ["M" + str(x) for x in rng.integers(10**8, 10**9, size=n_dest_merchants)]
     )
-    name_dest = np.where(typ == "PAYMENT", dest_merchants, dest_customers)
+    name_dest = np.where(
+        typ == "PAYMENT",
+        rng.choice(dest_merchant_pool, size=n),
+        rng.choice(dest_customer_pool, size=n),
+    )
 
     # Balances (legit defaults)
     old_org = np.round(rng.lognormal(mean=9.0, sigma=1.2, size=n), 2)

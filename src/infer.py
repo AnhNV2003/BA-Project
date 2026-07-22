@@ -187,7 +187,10 @@ def score(df: pd.DataFrame, bundle: dict, use_dest_history: bool = True) -> pd.D
 
     transformer = bundle["transformer"]
     matrix_group = bundle["matrix"]
-    X = transformer.transform(enriched, matrix_group)
+    # The deployed model was fit on the selected feature group's subset
+    # (bundle["features"]), but transform() returns the full tree/linear matrix.
+    # Select the trained columns so serving matches fit exactly.
+    X = transformer.transform(enriched, matrix_group)[bundle["features"]]
     t2 = time.perf_counter()
     print(f"[infer] transform done   ({t2 - t1:.1f}s)  shape={X.shape}", file=sys.stderr)
 

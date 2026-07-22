@@ -1,81 +1,74 @@
-"""Fraud-analyst review queue (Module 6, draft) — Streamlit demo.
+"""Fraud-detection application (Module 6) — multipage Streamlit.
 
-Loads the trained model, scores a batch of transactions, and presents them as a
-prioritised review queue — mirroring what a risk analyst would triage.
+Pages:
+  🛡️ Review Queue — all 3 models score each transaction; triage by max-risk.
+  📈 Monitoring   — drift dashboard (Reports + Live tabs), per-model prediction drift.
 
 Run:
     streamlit run app/streamlit_app.py
 """
-from __future__ import annotations
-
-import pathlib
-import sys
-
-import joblib
-import pandas as pd
 import streamlit as st
 
-ROOT = pathlib.Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "src"))
-from features import build_features            # noqa: E402
-from config import MODELS, DATA_PROCESSED      # noqa: E402
+# app_common wires sys.path (src/, monitoring/) — import it BEFORE the views so
+# their module-level `from ensemble/config/drift import ...` resolve.
+import app_common  # noqa: F401,E402
+import embedded_api  # noqa: E402
+import home_view  # noqa: E402
+import review_view  # noqa: E402
+import cost_view  # noqa: E402
+import eval_view  # noqa: E402
+import segment_view  # noqa: E402
+import monitoring_view  # noqa: E402
+import live_view  # noqa: E402
+import api_tester_view  # noqa: E402
 
-st.set_page_config(page_title="Fraud Review Queue", layout="wide")
+st.set_page_config(page_title="E-Commerce Payment Fraud Detection", layout="wide")
 
+# Start the FastAPI scoring service in-process (once) so the API Tester page
+# works on single-port hosts like Streamlit Community Cloud. No-op if a uvicorn
+# is already serving the port locally.
+embedded_api.ensure_api_running()
 
-@st.cache_resource
-def load_model():
-    return joblib.load(MODELS / "fraud_model.joblib")
+# --- Left panel: school logo + group roster (shown on every page) ---
+_LOGO = app_common.ROOT / "hust-full.png"
+if _LOGO.exists():
+    st.sidebar.image(str(_LOGO), use_container_width=True)
 
-
-@st.cache_data
-def load_and_score():
-    bundle = load_model()
-    p = DATA_PROCESSED / "sample_preview.csv"
-    df = pd.read_csv(p)
-    X = build_features(df)[bundle["features"]].astype(float)
-    df["risk_score"] = bundle["model"].predict_proba(X)[:, 1]
-    thr = bundle["threshold"]
-    block = max(0.9, thr)
-    df["decision"] = pd.cut(df["risk_score"], [-1, thr, block, 2],
-                            labels=["allow", "review", "block"])
-    return df, thr, block
-
-
-bundle = load_model()
-df, thr, block = load_and_score()
-
-st.title("🛡️ Fraud Review Queue")
-st.caption(f"Model: **{bundle['model_name']}** · review ≥ {thr:.3f} · block ≥ {block:.3f}")
-
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Transactions", f"{len(df):,}")
-c2.metric("To review", int((df.decision == "review").sum()))
-c3.metric("Auto-block", int((df.decision == "block").sum()))
-c4.metric("Actual fraud", int(df.isFraud.sum()))
-
-st.sidebar.header("Filters")
-min_score = st.sidebar.slider("Minimum risk score", 0.0, 1.0, float(thr), 0.01)
-types = st.sidebar.multiselect("Transaction type", sorted(df["type"].unique()),
-                               default=["TRANSFER", "CASH_OUT"])
-only_flagged = st.sidebar.checkbox("Only flagged (review/block)", value=True)
-
-view = df[df["risk_score"] >= min_score]
-if types:
-    view = view[view["type"].isin(types)]
-if only_flagged:
-    view = view[view["decision"].isin(["review", "block"])]
-view = view.sort_values("risk_score", ascending=False)
-
-cols = ["risk_score", "decision", "type", "amount", "account_age_days",
-        "is_new_device", "shipping_billing_mismatch", "num_failed_payment_attempts",
-        "ip_billing_distance_km", "high_risk_country", "hour_of_day", "isFraud"]
-st.subheader(f"Queue — {len(view):,} transactions")
-st.dataframe(
-    view[cols].style.format({"risk_score": "{:.3f}", "amount": "{:,.0f}",
-                             "ip_billing_distance_km": "{:,.0f}"})
-    .background_gradient(subset=["risk_score"], cmap="Reds"),
-    use_container_width=True, height=520,
+st.sidebar.markdown(
+    """
+#### E-Commerce Real-Time Payment Fraud Detection
+*Business Analytics — Master's Capstone Project*
+"""
 )
-st.caption("`isFraud` shown here only for demo evaluation; unavailable at real "
-           "scoring time. Sort/triage by `risk_score`.")
+st.sidebar.divider()
+
+st.sidebar.markdown(
+    """
+### Group
+| Member | Student ID |
+| --- | --- |
+| Lương Minh Dương | 20251038M |
+| Trần Lê Phương Thảo | 20251186M |
+| Hoàng Minh Hoàng | 20252561M |
+| Ngô Việt Anh | 20252570M |
+| Phạm Tuấn Kiệt | 20252751M |
+| Nguyễn Như Thái | 20252270M |
+"""
+)
+st.sidebar.divider()
+
+nav = st.navigation([
+    # Order tells the capstone story: pitch → problem → product → rigor → value →
+    # real-time → operations → serving. Explicit url_path is required: the page
+    # callables are all named `render`, so Streamlit would otherwise infer the
+    # same pathname for each and reject it.
+    st.Page(home_view.render, title="Overview", icon="🏠", url_path="overview", default=True),
+    st.Page(segment_view.render, title="Segment Analytics", icon="🔎", url_path="segments"),
+    st.Page(review_view.render, title="Review Queue", icon="🛡️", url_path="review"),
+    st.Page(eval_view.render, title="Model Evaluation", icon="📊", url_path="evaluation"),
+    st.Page(cost_view.render, title="Cost & ROI", icon="💰", url_path="cost"),
+    st.Page(live_view.render, title="Live Feed", icon="📡", url_path="live"),
+    st.Page(monitoring_view.render, title="Monitoring", icon="📈", url_path="monitoring"),
+    st.Page(api_tester_view.render, title="API Tester", icon="🧪", url_path="api-tester"),
+])
+nav.run()
