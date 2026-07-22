@@ -54,6 +54,8 @@ venv/
 
 # OS / editor
 .DS_Store
+desktop.ini
+Thumbs.db
 .idea/
 .vscode/
 scored.csv
