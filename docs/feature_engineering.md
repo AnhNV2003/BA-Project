@@ -2,11 +2,11 @@
 
 ## Source / Split
 
-- Source: `data/processed/transactions_clean.parquet` with **100,000 rows**.
+- Source: `data/processed/transactions_clean.parquet` with **6,362,620 rows**.
 
-- Train/validation/test rows: **70,000 / 15,000 / 15,000**.
+- Train/validation/test rows: **4,453,834 / 954,393 / 954,393**.
 
-- Step windows: train 1..520; validation 520..631; test 631..743.
+- Step windows: train 1..323; validation 323..378; test 378..743.
 
 - Transformer state is fit on train only; train-fitted frequency maps, imputer, and scaler are reused for validation/test.
 
@@ -53,11 +53,11 @@
 
 ## Imbalance Handling Guidance for M5
 
-- Full fraud prevalence: **0.1500%**.
+- Full fraud prevalence: **0.1291%**.
 
-- Train fraud prevalence: **0.1400%**.
+- Train fraud prevalence: **0.0818%**.
 
-- Recommended model weight default: `scale_pos_weight=713.29` or class weights.
+- Recommended model weight default: `scale_pos_weight=1221.57` or class weights.
 
 - SMOTE/undersampling, if used, must be applied only inside the train fold after transformation.
 
@@ -76,8 +76,8 @@
 
 | split      |   dest_seen_before_rate |   max_dest_txn_count_so_far |
 |:-----------|------------------------:|----------------------------:|
-| validation |                  0.9932 |                          16 |
-| test       |                  0.9972 |                          18 |
+| validation |                  0.5757 |                         109 |
+| test       |                  0.5644 |                         112 |
 
 
 ## Notes

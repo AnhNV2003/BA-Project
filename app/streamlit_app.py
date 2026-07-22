@@ -22,7 +22,11 @@ import monitoring_view  # noqa: E402
 import live_view  # noqa: E402
 import api_tester_view  # noqa: E402
 
-st.set_page_config(page_title="E-Commerce Payment Fraud Detection", layout="wide")
+st.set_page_config(
+    page_title="E-Commerce Payment Fraud Detection",
+    page_icon=str(app_common.ROOT / "hust.png"),
+    layout="wide",
+)
 
 # Start the FastAPI scoring service in-process (once) so the API Tester page
 # works on single-port hosts like Streamlit Community Cloud. No-op if a uvicorn
