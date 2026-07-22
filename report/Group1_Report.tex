@@ -1,5 +1,5 @@
 %==============================================================================
-%  Business Intelligence (IT5315E) — Group Project Report
+%  Business Intelligence (IT5315E) - Group Project Report
 %  Real-Time Payment Fraud Detection for an E-Commerce Platform
 %
 %  Compiles with pdfLaTeX (default on Overleaf) OR XeLaTeX/LuaLaTeX.
@@ -104,7 +104,7 @@
 {\color{brandteal}\rule{\textwidth}{1.2pt}}\par
 \vspace{1.1cm}
 
-{\color{midgray}\normalsize BUSINESS INTELLIGENCE — GROUP PROJECT REPORT\par}
+{\color{midgray}\normalsize BUSINESS INTELLIGENCE - GROUP PROJECT REPORT\par}
 \vspace{0.3cm}
 {\Huge\bfseries\color{brandteal} Real-Time Payment Fraud Detection\\[6pt] for an E-Commerce Platform\par}
 \vspace{0.5cm}
@@ -116,7 +116,7 @@
 \begin{tabular}{@{}rl@{}}
 \textbf{Course} & Business Intelligence (IT5315E)\\[3pt]
 \textbf{Instructor} & Assoc. Prof. Bùi Quốc Trung\\[3pt]
-\textbf{Domain} & E-Commerce — Payment Risk \& Trust\\[3pt]
+\textbf{Domain} & E-Commerce - Payment Risk \& Trust\\[3pt]
 \textbf{Report scope} & Modules 1–8 (complete end-to-end lifecycle)\\
 \end{tabular}
 
@@ -152,7 +152,7 @@ transactions are likely to be fraudulent, and how should the platform balance bl
 fraud against approving legitimate orders without unnecessary friction?}
 
 We combine the public \textbf{PaySim} transaction dataset (6{,}362{,}620 records, fraud
-prevalence 0.129\%) with a purpose-built \textbf{synthetic contextual layer} — identity,
+prevalence 0.129\%) with a purpose-built \textbf{synthetic contextual layer} - identity,
 device, geolocation, and behavioural risk signals generated in Python with Faker plus
 custom business logic, each field documented in a full data dictionary. The pipeline
 proceeds through exploratory data analysis, conservative cleaning, leakage-aware feature
@@ -163,8 +163,8 @@ The central methodological contribution is a strict separation between \emph{lea
 \emph{deployable} features. PaySim's post-transaction balance fields near-deterministically
 encode the label but are unknown at authorization time; models trained on them reach an
 artificial AUC-PR of $\approx 1.0$. We exclude them from deployment and instead ship a
-model trained only on authorization-time signals. The deployable model — \textbf{XGBoost}
-on the 44-feature \code{realistic} group — achieves a held-out test \textbf{AUC-PR of
+model trained only on authorization-time signals. The deployable model - \textbf{XGBoost}
+on the 44-feature \code{realistic} group - achieves a held-out test \textbf{AUC-PR of
 0.908}, \textbf{ROC-AUC of 0.999}, \textbf{recall of 96.8\%}, and avoids \textbf{99.8\%}
 of fraud loss while flagging only \textbf{1.6\%} of transactions.
 
@@ -332,14 +332,14 @@ simulation of mobile money transactions. Key structural facts, confirmed on the 
 
 \begin{itemize}[nosep,leftmargin=1.4em]
   \item \textbf{6{,}362{,}620} transactions over \textbf{743} hourly steps ($\approx$30 days).
-  \item \textbf{8{,}213} frauds — a prevalence of \textbf{0.129\%} (severe imbalance).
+  \item \textbf{8{,}213} frauds - a prevalence of \textbf{0.129\%} (severe imbalance).
   \item Fraud occurs \emph{only} in \code{TRANSFER} and \code{CASH\_OUT} transactions.
   \item Eleven base columns: \code{step}, \code{type}, \code{amount},
         \code{nameOrig}/\code{nameDest}, four balance fields, \code{isFraud} (target),
         and PaySim's own rule flag \code{isFlaggedFraud}.
 \end{itemize}
 
-PaySim provides transactions, balances, and labels but \emph{no} e-commerce risk context —
+PaySim provides transactions, balances, and labels but \emph{no} e-commerce risk context -
 no customer tenure, device fingerprint, geolocation, address mismatch, or failed-payment
 history. The project brief therefore requires a synthetic contextual extension.
 
@@ -351,13 +351,13 @@ so that no synthetic field perfectly separates the classes. This keeps the task 
 generator (\code{src/synth\_context.py}) is organised into three layers:
 
 \begin{itemize}[nosep,leftmargin=1.4em]
-  \item \textbf{L1 — Identity} (display/context only): \code{customer\_id},
+  \item \textbf{L1 - Identity} (display/context only): \code{customer\_id},
         \code{customer\_name}, \code{email}, \code{billing\_city}. A fixed pool of
         200{,}000 Faker identities is used because the real \code{nameOrig} is almost
         always single-use.
-  \item \textbf{L2 — Account risk}: \code{account\_age\_days} (lognormal),
+  \item \textbf{L2 - Account risk}: \code{account\_age\_days} (lognormal),
         \code{high\_risk\_country} / \code{billing\_country}, \code{is\_disposable\_email}.
-  \item \textbf{L3 — Transaction / device / time risk}: \code{is\_new\_device},
+  \item \textbf{L3 - Transaction / device / time risk}: \code{is\_new\_device},
         \code{shipping\_billing\_mismatch}, \code{num\_failed\_payment\_attempts} (Poisson),
         \code{ip\_billing\_distance\_km} (Haversine from home to a simulated IP),
         \code{browser}, \code{device\_os}, time features, and illustrative account velocity.
@@ -372,7 +372,7 @@ leakage), each fraud-conditioned field is generated through an \emph{effective r
 \end{equation}
 with \emph{reveal rate} $r=0.55$ and \emph{legit noise} $n=0.04$ ($U_i,V_i \sim \text{Uniform}(0,1)$).
 Only when $\text{risky}_i$ is true does the field draw from its ``fraud'' distribution.
-Consequently many frauds look benign and some legitimate rows look risky — exactly the
+Consequently many frauds look benign and some legitimate rows look risky - exactly the
 ambiguity a real detector faces. Table~\ref{tab:genparams} lists the parameters.
 
 \begin{table}[h]
@@ -422,14 +422,14 @@ the base PaySim columns and Table~\ref{tab:datadict_synth} the synthetic layer.
 \code{isFlaggedFraud} & int & flag & \{0,1\} & PaySim's built-in rule flag for very large transfers.\\
 \bottomrule
 \end{tabularx}
-\caption{Data dictionary — base PaySim columns.}
+\caption{Data dictionary - base PaySim columns.}
 \label{tab:datadict_base}
 \end{table}
 
 {\footnotesize
 \setlength{\tabcolsep}{4pt}
 \begin{longtable}{@{}p{4.6cm} p{1.6cm} p{2.3cm} p{6.3cm}@{}}
-\caption{Data dictionary — synthetic contextual layer (Module 1). Fields are grouped by risk
+\caption{Data dictionary - synthetic contextual layer (Module 1). Fields are grouped by risk
 layer; a field is \emph{fraud-conditioned} (softened via the reveal/noise mask) wherever its
 logic lists distinct legit/fraud parameters.}
 \label{tab:datadict_synth}\\
@@ -446,19 +446,19 @@ logic lists distinct legit/fraud parameters.}
 \endfoot
 \bottomrule
 \endlastfoot
-\multicolumn{4}{@{}l}{\textbf{\color{brandteal}L1 — Identity (display / context only)}}\\
+\multicolumn{4}{@{}l}{\textbf{\color{brandteal}L1 - Identity (display / context only)}}\\
 \texttt{customer\_id} & string & U0..U199999 & Assigned from a fixed synthetic customer pool because real \texttt{nameOrig} is single-use.\\
 \texttt{customer\_name} & string & Faker name & Faker name for review-queue / demo display only; not a model feature.\\
 \texttt{email} & string & handle@domain & Faker handle + common or disposable domain per \texttt{is\_disposable\_email}.\\
 \texttt{billing\_city} & string & Faker city & Faker city for analyst-facing context.\\
 \addlinespace
-\multicolumn{4}{@{}l}{\textbf{\color{brandteal}L2 — Account risk}}\\
+\multicolumn{4}{@{}l}{\textbf{\color{brandteal}L2 - Account risk}}\\
 \texttt{account\_age\_days} & int / days & 1..3650 & Lognormal days; legit $(6.0,0.9)$, fraud $(5.0,1.0)$, via reveal/noise mask.\\
 \texttt{billing\_country} & cat & 12 ISO codes & High-risk = NG/RU/CN/ID; selected by \texttt{high\_risk\_country}.\\
 \texttt{high\_risk\_country} & int / flag & \{0,1\} & Bernoulli; legit 0.06, fraud 0.28.\\
 \texttt{is\_disposable\_email} & int / flag & \{0,1\} & Bernoulli; legit 0.04, fraud 0.22.\\
 \addlinespace
-\multicolumn{4}{@{}l}{\textbf{\color{brandteal}L3 — Transaction / device / time risk}}\\
+\multicolumn{4}{@{}l}{\textbf{\color{brandteal}L3 - Transaction / device / time risk}}\\
 \texttt{is\_new\_device} & int / flag & \{0,1\} & Bernoulli; legit 0.15, fraud 0.50.\\
 \texttt{shipping\_billing\_mismatch} & int / flag & \{0,1\} & Bernoulli; legit 0.08, fraud 0.42.\\
 \texttt{num\_failed\_payment\_attempts} & int / count & $\ge 0$ & Poisson; legit $\lambda{=}0.3$, fraud $\lambda{=}1.4$.\\
@@ -501,7 +501,7 @@ natural fraud rate.
 \section{Class imbalance}
 
 The dataset is severely imbalanced: 6{,}354{,}407 legitimate vs.\ 8{,}213 fraudulent rows
-(Figure~\ref{fig:imbalance}). This 774:1 ratio dictates every downstream choice — we
+(Figure~\ref{fig:imbalance}). This 774:1 ratio dictates every downstream choice - we
 prefer AUC-PR over accuracy, use class weights, and select the threshold from a cost
 function rather than the default 0.5.
 
@@ -550,7 +550,7 @@ Transaction amounts are heavy-tailed: median $\approx 74{,}872$, the 99.9th perc
 $\approx 8.96$M, and a maximum of $92{,}445{,}516$. Fraudulent transactions skew towards
 larger amounts (Figure~\ref{fig:amount}). Binning amount into deciles
 (Figure~\ref{fig:decile}) shows the fraud rate rising sharply in the top decile
-(0.69\%) — an order of magnitude above the low deciles ($\approx$0.02\%). This motivates
+(0.69\%) - an order of magnitude above the low deciles ($\approx$0.02\%). This motivates
 \code{log\_amount} and confirms that amount is a genuine (if weak on its own) signal.
 
 \begin{figure}[h]
@@ -572,7 +572,7 @@ larger amounts (Figure~\ref{fig:amount}). Binning amount into deciles
 
 Fraud has a striking diurnal signature (Figure~\ref{fig:time}, left): the fraud rate peaks
 at roughly \textbf{22\%} in the 04:00–05:00 window and is negligible during the day. The derived
-\code{is\_night} flag captures this — night transactions carry a 1.74\% fraud rate versus
+\code{is\_night} flag captures this - night transactions carry a 1.74\% fraud rate versus
 0.10\% otherwise. The per-day panel (right) shows a spike on the final simulation day; this
 is a low-volume simulation quirk (a handful of rows) rather than a real pattern, and we
 treat it as such.
@@ -588,8 +588,8 @@ treat it as such.
 
 The synthetic risk flags behave as designed (Figure~\ref{fig:flags}, Table~\ref{tab:flags}):
 each of the account/device/context flags roughly doubles-to-triples the fraud rate when set,
-while the temporal \code{is\_night} flag lifts it far more — from 0.10\% to 1.74\%
-($\approx$17$\times$). None is deterministic, however — the overlap engineered via the
+while the temporal \code{is\_night} flag lifts it far more - from 0.10\% to 1.74\%
+($\approx$17$\times$). None is deterministic, however - the overlap engineered via the
 reveal/noise mechanism is visible and intended.
 
 \begin{minipage}{0.55\textwidth}
@@ -618,7 +618,7 @@ reveal/noise mechanism is visible and intended.
 
 \vspace{0.3cm}
 Numeric context fields tell the same story (Figure~\ref{fig:numeric}): fraudulent accounts
-are younger, sit farther from their billing IP, and have more failed payment attempts — but
+are younger, sit farther from their billing IP, and have more failed payment attempts - but
 the distributions overlap heavily, so no single field is a silver bullet.
 
 \begin{figure}[h]
@@ -628,7 +628,7 @@ the distributions overlap heavily, so no single field is a silver bullet.
 \label{fig:numeric}
 \end{figure}
 
-\section{Balance signature — an early leakage warning}
+\section{Balance signature - an early leakage warning}
 \label{sec:balance}
 
 PaySim's balance-reconciliation fields are \emph{extraordinarily} predictive
@@ -704,7 +704,7 @@ features (Module 4).
 \section{Channels and correlations}
 
 Browser and OS carry essentially no fraud signal (rates flat at $\approx$0.12–0.14\%), as
-expected from uniform synthetic generation. Billing country does carry signal — the
+expected from uniform synthetic generation. Billing country does carry signal - the
 high-risk countries RU/ID/NG/CN top the chart at 0.27–0.37\%
 (Figure~\ref{fig:channels}). Finally, linear correlations with the target
 (Figure~\ref{fig:corr}) are all individually weak ($|r|<0.09$): \code{amount},
@@ -755,7 +755,7 @@ leakage risk is handled at the feature stage, not by deletion).
   \item \textbf{Missing values:} none in any of the 33 input columns.
   \item \textbf{Duplicates:} 0 exact duplicates on the PaySim base columns.
   \item \textbf{Negative amounts:} 0. \textbf{Steps outside 1..743:} 0.
-  \item \textbf{Zero-amount rows:} 16 found — kept and marked with a new
+  \item \textbf{Zero-amount rows:} 16 found - kept and marked with a new
         \code{flag\_zero\_amount} column rather than dropped.
   \item \textbf{Category validation:} \code{type}, \code{browser}, \code{device\_os},
         \code{billing\_country} all match their expected value sets exactly; no
@@ -768,7 +768,7 @@ leakage risk is handled at the feature stage, not by deletion).
 \end{itemize}
 
 Table~\ref{tab:cleanba} gives the before/after summary. Net effect: two audit columns added,
-zero rows removed — a fully documented, reversible cleaning step.
+zero rows removed - a fully documented, reversible cleaning step.
 
 \begin{table}[h]
 \centering
@@ -807,7 +807,7 @@ way fraud models fail in production, so we enforce it structurally, not just by 
 \section{Chronological split (no test peeking)}
 
 We split \emph{by time} on \code{step} (Table~\ref{tab:split}), not randomly, so training
-always precedes validation/test — a realistic ``predict the future'' setup that also
+always precedes validation/test - a realistic ``predict the future'' setup that also
 surfaces temporal drift.
 
 \begin{table}[h]
@@ -823,7 +823,7 @@ Test & 954{,}393 & 0.4200\% & 378–743\\
 \bottomrule
 \end{tabular}
 \caption{Time-based 70/15/15 split. The higher test fraud rate reflects genuine temporal
-non-stationarity — a useful stress test.}
+non-stationarity - a useful stress test.}
 \label{tab:split}
 \end{table}
 
@@ -834,10 +834,10 @@ Four families of features are engineered (\code{src/features.py}):
 \begin{enumerate}[nosep,leftmargin=1.6em]
   \item \textbf{Base PaySim:} \code{amount}, \code{log\_amount}, \code{amount\_cents}
         (card-testing / round-number signal), pre-transaction balances, transfer/cash-out
-        flags, and — in the reference track only — balance-reconciliation errors and
+        flags, and - in the reference track only - balance-reconciliation errors and
         drained/empty flags.
   \item \textbf{Destination history (causal, past-only):} 16 features aggregating each
-        \code{nameDest}'s \emph{prior} behaviour — transaction count so far, amount
+        \code{nameDest}'s \emph{prior} behaviour - transaction count so far, amount
         sum/mean/std so far, unique senders so far (fan-in), per-type counts, recency
         (\code{time\_since\_dest\_last\_seen}), and anomaly ratios
         (\code{amount\_to\_dest\_mean\_ratio}, \code{amount\_dest\_zscore}). These are
@@ -882,7 +882,7 @@ bundle; \code{base}/\code{all} include leaky balance fields and are reference-on
 
 A single \code{FeatureTransformer} object encapsulates all state that must be
 \emph{train-fitted}: the frequency-encoding maps, a median imputer, and a
-\code{StandardScaler} (for the linear model). It exposes two matrices — a \code{tree}
+\code{StandardScaler} (for the linear model). It exposes two matrices - a \code{tree}
 matrix (raw, NaN-tolerant) for XGBoost/Random Forest and a \code{linear} matrix (imputed +
 scaled) for Logistic Regression. Validation/test data are only ever \emph{transformed} with
 train-fitted state, eliminating train/serve skew. The transformer even refuses to run on raw
@@ -924,7 +924,7 @@ address this through:
         data.
   \item \textbf{Resampling (optional, train-fold only):} \code{src/imbalance.py} provides
         SMOTE and random undersampling, applied \emph{strictly inside the training fold
-        after transformation} — validation/test folds are never resampled, so evaluation
+        after transformation} - validation/test folds are never resampled, so evaluation
         stays honest.
   \item \textbf{Metric choice:} evaluation uses AUC-PR and the cost function, which remain
         informative under imbalance where accuracy and ROC-AUC can be misleadingly high.
@@ -950,7 +950,7 @@ prevent optimistic bias:
   \item Every (model $\times$ feature-group) pair is trained on \code{train}.
   \item The \textbf{operating threshold} is chosen on \code{validation} by minimising the
         expected cost of Eq.~\eqref{eq:cost}.
-  \item The \textbf{best deployable configuration} is chosen on \code{validation} cost —
+  \item The \textbf{best deployable configuration} is chosen on \code{validation} cost -
         never on test.
   \item \code{test} is evaluated \textbf{exactly once} for the selected configuration.
   \item Leaky groups (\code{base}, \code{all}) are \emph{excluded from bundle selection};
@@ -983,7 +983,7 @@ XGBoost & tree & \code{n\_estimators=220}, \code{max\_depth=5}, \code{learning\_
 
 \section{Evaluation metrics for imbalanced data}
 
-We report metrics suited to a 0.13\%-prevalence problem: \textbf{AUC-PR} (primary — the
+We report metrics suited to a 0.13\%-prevalence problem: \textbf{AUC-PR} (primary - the
 area under the precision–recall curve, which unlike ROC-AUC is sensitive to the minority
 class), \textbf{ROC-AUC}, \textbf{precision / recall / F1} at the operating point, the
 \textbf{expected cost} of Eq.~\eqref{eq:cost}, and \textbf{loss avoided \%} (share of
@@ -1016,8 +1016,8 @@ sourcing method).}
 
 \subsection{Break-even and why the model blocks widely}
 
-Only the \emph{ratio} of coefficients matters. The break-even amount — the fraud value at
-which blocking is worthwhile even at the risk of a false positive — is
+Only the \emph{ratio} of coefficients matters. The break-even amount - the fraud value at
+which blocking is worthwhile even at the risk of a false positive - is
 \[
 \text{break-even} = \frac{c_{FP}}{c_{FN}} = \frac{25}{1} = 25 \text{ currency units}.
 \]
@@ -1025,7 +1025,7 @@ Because the median fraudulent amount in PaySim is enormous (hundreds of thousand
 essentially \emph{every} suspected fraud is worth blocking. The rational consequence is an
 operating point with \textbf{very high recall and modest precision}: the model deliberately
 casts a wide net because a missed large-value fraud costs far more than a review. This is a
-correct, intended outcome of the cost model, not a defect — and it is why we report loss
+correct, intended outcome of the cost model, not a defect - and it is why we report loss
 avoided and flagged-rate alongside precision.
 
 \begin{keybox}
@@ -1043,7 +1043,7 @@ Module 8.
 Table~\ref{tab:realistic} compares the three models on the deployable \code{realistic}
 group. \textbf{XGBoost} is the clear winner on every axis that matters: the highest test
 AUC-PR (0.908) and F1 (0.399), while still catching 96.8\% of fraud and avoiding 99.8\% of
-loss. Logistic Regression confirms the EDA's hint — a linear model cannot separate this data
+loss. Logistic Regression confirms the EDA's hint - a linear model cannot separate this data
 (test AUC-PR 0.586) and compensates with an untenable flag rate. Random Forest is
 competitive but trails XGBoost.
 
@@ -1068,7 +1068,7 @@ selected on validation). XGBoost is selected for deployment.}
 
 Holding the model fixed at XGBoost and varying the feature group
 (Table~\ref{tab:ablation}) makes the leakage story concrete. The leaky groups
-(\code{base}, \code{all}) reach an artificial test AUC-PR of $\approx$1.0 — driven entirely
+(\code{base}, \code{all}) reach an artificial test AUC-PR of $\approx$1.0 - driven entirely
 by the post-transaction balance fields. Among deployable groups, neither destination history
 alone (\code{dest}) nor context alone (\code{synth}) is sufficient; only their combination
 in \code{realistic} yields strong, honest performance (0.908). This is the core empirical
@@ -1089,11 +1089,11 @@ justification for the deployed feature set.
 \bottomrule
 \end{tabular}
 \caption{XGBoost across feature groups. $^{\dagger}$Leaky groups are an upper-bound
-reference only — \emph{not} deployable. The deployable optimum is \code{realistic}.}
+reference only - \emph{not} deployable. The deployable optimum is \code{realistic}.}
 \label{tab:ablation}
 \end{table}
 
-\subsection{Selected model — the deployed configuration}
+\subsection{Selected model - the deployed configuration}
 
 The saved bundle (\code{models/fraud\_model.joblib}) is \textbf{XGBoost on \code{realistic}
 (44 features)} with a validation-selected threshold of \textbf{0.380}. Its full profile is
@@ -1127,7 +1127,7 @@ Loss avoided & 99.97\% & 99.82\%\\
 At the chosen threshold on the test window the model flags 1.62\% of all transactions,
 catches 96.8\% of frauds, and intercepts 99.8\% of the fraudulent money. Precision is 25\%
 by design (Section~\ref{sec:cost}): three of every four flags are false alarms sent to
-review, which the cost model accepts because the alternative — missing a six-figure fraud —
+review, which the cost model accepts because the alternative - missing a six-figure fraud -
 is far costlier. Two thresholds are exposed downstream (Module 6): the review threshold
 (0.380) and a high-confidence auto-block threshold, enabling an \emph{allow / review / block}
 policy rather than a binary decision.
@@ -1152,7 +1152,7 @@ and \emph{own} cost-tuned decision threshold. The single best model
 (\code{src/infer.py}).
 
 At scoring time every model votes independently and the verdicts are combined by a
-\textbf{max-risk} rule — the most severe decision wins (\code{block > review > allow}) — with
+\textbf{max-risk} rule - the most severe decision wins (\code{block > review > allow}) - with
 per-model thresholds and a shared high-confidence block floor of \textbf{0.9}
 (Eq.~\ref{eq:decide}):
 \begin{equation}
@@ -1168,11 +1168,11 @@ per-model thresholds and a shared high-confidence block floor of \textbf{0.9}
 \end{equation}
 This design buys two things over a single model: (i) a max-risk \emph{union} raises recall
 (any model can escalate a suspicious case), matching the cost model's preference for catching
-fraud; and (ii) \textbf{graceful degradation} — if one model errors at request time, its
+fraud; and (ii) \textbf{graceful degradation} - if one model errors at request time, its
 entry is dropped, the aggregate is computed from the survivors, and the response is flagged
 \code{degraded} rather than failing. The same \code{src/ensemble.py} scoring path backs both
 the API (single record, via \code{score\_record}) and the Streamlit batch (via
-\code{score\_batch}), so a transaction gets an identical verdict either way — train/serve
+\code{score\_batch}), so a transaction gets an identical verdict either way - train/serve
 parity by construction.
 
 \begin{keybox}
@@ -1237,8 +1237,8 @@ aggregate. Here Random Forest escalates to \emph{block}, so the aggregate blocks
 
 For every flagged transaction the review queue shows a short, human-readable list of
 \emph{why} it was flagged (\code{src/reasons.py}). We deliberately use rule-based reason
-codes — e.g. ``2 failed payment attempts'', ``high-risk country'', ``IP 1{,}300\,km from
-billing'', ``account fully drained'', ``shipping $\ne$ billing'', ``new account (12d)'' —
+codes - e.g. ``2 failed payment attempts'', ``high-risk country'', ``IP 1{,}300\,km from
+billing'', ``account fully drained'', ``shipping $\ne$ billing'', ``new account (12d)'' -
 rather than a black-box attribution such as SHAP: for a fraud analyst, and for a regulator,
 a concrete list of the risk signals actually present is more actionable and more defensible
 than a bar chart of feature weights. The reason codes \emph{explain}; the ensemble score
@@ -1251,13 +1251,13 @@ full money breakdown using the Section~\ref{sec:cost} coefficients: fraud exposu
 vs.\ missed amount, false-positive cost, review labour, and the resulting \emph{net savings}
 versus two baselines (do-nothing and review-everything), plus an ROI figure (savings per unit
 of operating spend). The Cost \& ROI page lets an analyst edit the cost matrix live and see
-the cost-optimal threshold move — making the fraud/friction trade-off tangible in currency
+the cost-optimal threshold move - making the fraud/friction trade-off tangible in currency
 rather than abstract metrics.
 
 \section{Eight-page analyst application}
 
 A multi-page Streamlit application (\code{app/streamlit\_app.py} via \code{st.navigation})
-presents the product as a capstone narrative — pitch $\to$ problem $\to$ product $\to$ rigour
+presents the product as a capstone narrative - pitch $\to$ problem $\to$ product $\to$ rigour
 $\to$ value $\to$ real-time $\to$ operations $\to$ serving (Table~\ref{tab:pages}). Every
 analytical page carries a data-provenance badge, and model metrics are always reported on the
 held-out temporal test split.
@@ -1309,7 +1309,7 @@ review queue and monitoring pages.
 
 A deployed fraud model decays as fraud tactics and customer behaviour shift. Module 7 closes
 the loop with a monitoring layer that detects distribution drift, decides when to retrain,
-performs the retraining, and raises an alert — all surfaced on the Monitoring page of the
+performs the retraining, and raises an alert - all surfaced on the Monitoring page of the
 analyst app.
 
 \section{Drift detection with the Population Stability Index}
@@ -1322,11 +1322,11 @@ current window (later half):
 \end{equation}
 where $r_b, c_b$ are the reference/current fractions in bin $b$ (reference-quantile bins).
 PSI is transparent and dependency-free. We use the industry-standard bands
-$\text{PSI}<0.10$ (stable), $0.10$–$0.25$ (moderate — monitor), and $>0.25$ (significant).
+$\text{PSI}<0.10$ (stable), $0.10$–$0.25$ (moderate - monitor), and $>0.25$ (significant).
 Critically, PSI is computed both on the \textbf{input features} (\code{amount},
 \code{account\_age\_days}, \code{ip\_billing\_distance\_km}, failed attempts, new-device,
 hour) \emph{and} on each model's \textbf{predicted-score distribution}
-(\code{PREDICTION\_SCORE\_logreg/\_rf/\_xgb}) — so both data drift and per-model concept
+(\code{PREDICTION\_SCORE\_logreg/\_rf/\_xgb}) - so both data drift and per-model concept
 drift are visible.
 
 \section{Retraining trigger and self-validation}
@@ -1397,7 +1397,7 @@ precision/recall as labels arrive, noting the label-delay caveat inherent to fra
 %==============================================================================
 
 Modules 1–7 translate directly into an operating policy for the platform's risk team. Each
-recommendation maps a signal to a concrete action — auto-block, manual review, or allow —
+recommendation maps a signal to a concrete action - auto-block, manual review, or allow -
 realised by the ensemble's max-risk thresholds and made auditable by the review queue's
 reason codes.
 
@@ -1407,8 +1407,8 @@ reason codes.
   \item \textbf{Auto-block} only very-high-confidence cases (any model $\ge$ the 0.9 block
         floor), reserving hard friction for the clearest fraud.
   \item \textbf{Route to manual review} the mid-confidence band (between each model's
-        cost-tuned review threshold and the block floor) — where the cost model already
-        places most flags — and show the analyst the reason codes so the decision is
+        cost-tuned review threshold and the block floor) - where the cost model already
+        places most flags - and show the analyst the reason codes so the decision is
         explainable.
   \item \textbf{Prioritise} the review queue by \emph{expected loss} (risk score $\times$
         amount) so scarce analyst capacity chases the largest exposures first.
@@ -1421,12 +1421,12 @@ reason codes.
 
 \begin{keybox}
 \textbf{Which signals auto-block vs.\ review?} (the brief's core M8 question.) \emph{Auto-block}
-is reserved for score-driven certainty (block floor) — no single raw signal auto-blocks,
+is reserved for score-driven certainty (block floor) - no single raw signal auto-blocks,
 because every synthetic signal overlaps between classes. \emph{Manual review} is triggered by
 the mid-band score \emph{and} is where high-severity reason codes (multiple failed attempts,
 high-risk country, drained account, large night-time transfer to a reused mule destination)
 concentrate. \emph{Allow} covers the low-score majority. This keeps auto-block precise and
-routes ambiguity to humans — matching the cost model's high-recall, review-heavy operating
+routes ambiguity to humans - matching the cost model's high-recall, review-heavy operating
 point.
 \end{keybox}
 
@@ -1434,7 +1434,7 @@ point.
 
 \begin{itemize}[nosep,leftmargin=1.4em]
   \item PaySim is a simulation; its post-transaction balance dynamics are cleaner than
-        reality — precisely why the leaky/deployable split (Chapters~\ref{ch:m4}--\ref{ch:m5})
+        reality - precisely why the leaky/deployable split (Chapters~\ref{ch:m4}--\ref{ch:m5})
         matters and why we never ship balance features.
   \item The contextual layer is synthetic; its parameters are plausible but not calibrated to
         a real platform, and real fraud would show richer cross-signal interactions.
@@ -1458,7 +1458,7 @@ point.
   \item Graph features on the destination network for stronger mule detection, and a
         learned/weighted ensemble instead of the current max-risk union.
   \item Rolling-window performance monitoring (with label delay) and an automatically
-        triggered — not just dashboard-initiated — retraining pipeline.
+        triggered - not just dashboard-initiated - retraining pipeline.
 \end{itemize}
 
 \section{Presentation and demo}
@@ -1481,7 +1481,7 @@ realistic constraint: by separating leaky post-transaction signals from deployab
 authorization-time signals, we avoid the near-perfect-but-useless result that balance
 features invite, and instead deliver a model the business can actually run. The reference
 XGBoost model reaches a test AUC-PR of 0.908, recall of 96.8\%, and avoids 99.8\% of fraud
-loss while flagging only 1.6\% of transactions — an operating point chosen not by accuracy
+loss while flagging only 1.6\% of transactions - an operating point chosen not by accuracy
 but by an explicit business cost function.
 
 That model is productionised as a three-model max-risk ensemble behind a real-time scoring
@@ -1489,7 +1489,7 @@ API and an eight-page analyst application, deployable to a single free-tier port
 honest by a PSI-based monitoring layer with a retraining trigger, in-app retraining, and
 webhook alerting. The result is not just a classifier but a complete, auditable analytics
 product: it scores transactions, explains its flags with reason codes, prices its decisions
-in currency, and watches itself for drift — closing the loop the brief asks for. The one
+in currency, and watches itself for drift - closing the loop the brief asks for. The one
 remaining task is to publish the public live link and attach demo screenshots.
 
 %==============================================================================
@@ -1505,7 +1505,7 @@ Leaky groups (\code{base}, \code{all}) are shaded conceptually as upper-bound re
 {\footnotesize
 \setlength{\tabcolsep}{4.5pt}
 \begin{longtable}{@{}l l c r rr rrr r@{}}
-\caption{Full results — all models $\times$ feature groups (test metrics; threshold selected
+\caption{Full results - all models $\times$ feature groups (test metrics; threshold selected
 on validation).}\label{tab:fullresults}\\
 \toprule
 \textbf{Model} & \textbf{Group} & \textbf{Leaky} & \textbf{\#f} & \textbf{val AUC-PR} & \textbf{test AUC-PR} & \textbf{Prec.} & \textbf{Recall} & \textbf{F1} & \textbf{Loss avd.}\\
