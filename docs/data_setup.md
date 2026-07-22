@@ -76,21 +76,25 @@ others — it bundles the model, transformer, threshold, and feature schema.
 ## Running the app on a fresh clone (no full dataset)
 
 `transactions_context.parquet` is ~526MB on the real full data and is **not**
-committed (GitHub's 100MB limit). To keep a bare clone runnable, a small
-**stratified sample** `data/processed/context_sample.parquet` (~28MB, ~300k
-rows, real fraud rate preserved) **is** committed. The Streamlit analytics
-pages (home / evaluation / cost / segment) and the monitoring view fall back to
-it automatically when the full frame is absent, and badge themselves as
-**"sample mode"** (approximate figures). So right after `git clone` the entire
-app runs — the model bundles are committed too.
+committed (GitHub's 100MB limit). Two small **committed** artifacts keep a bare
+clone fast and runnable:
 
-Rebuild the full frame any time for production-accurate numbers:
+- `data/processed/scored_test.parquet` — the **precomputed scored test split**
+  the Overview and Cost & ROI pages read directly. Without it those pages would
+  enrich+score the full 6.36M-row frame live (~10 min first load); with it they
+  load in ~1s, with full-data-accurate numbers.
+- `data/processed/context_sample.parquet` — a **stratified sample** (~28MB,
+  ~300k rows, real fraud rate preserved) the Monitoring view and the live
+  `get_scored_context` fallback use when the full frame is absent (badged
+  **"sample mode"**, approximate figures).
+
+The model bundles are committed too, so right after `git clone` the whole app
+runs. Rebuild the full frame any time for a fresh run, then regenerate both
+committed artifacts:
 ```bash
 python src/build_dataset.py --full     # -> transactions_context.parquet (526MB)
-```
-Regenerate the committed sample after rebuilding the full frame:
-```bash
-python src/make_context_sample.py      # -> context_sample.parquet (~28MB)
+python src/make_scored_test.py         # -> scored_test.parquet   (Overview/Cost fast path)
+python src/make_context_sample.py      # -> context_sample.parquet (~28MB fallback)
 ```
 
 ## Verifying you rebuilt the right thing

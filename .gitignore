@@ -19,6 +19,9 @@ data/processed/*.parquet
 # full frame is absent, so a fresh clone runs every page (in "sample mode").
 # Regenerate: python src/make_context_sample.py
 !data/processed/context_sample.parquet
+# ...and the precomputed scored test split the Overview/Cost pages read directly
+# (~1s load instead of ~10min live scoring). Regenerate: python src/make_scored_test.py
+!data/processed/scored_test.parquet
 
 # Synthetic caches (regenerate on first run) — customer master + stand-in
 data/synthetic/*

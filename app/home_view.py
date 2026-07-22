@@ -89,13 +89,10 @@ def render():
     st.divider()
     st.markdown("**The story, in order** (follow the sidebar top-to-bottom):")
     st.markdown(
-        "1. 🔎 **Segment Analytics** — where fraud concentrates (the problem)\n"
-        "2. 🛡️ **Review Queue** — triage transactions with reason codes (the product)\n"
-        "3. 📊 **Model Evaluation** — how well the models detect, on unseen data (the rigor)\n"
-        "4. 💰 **Cost & ROI** — what detection is worth in € vs. naive baselines (the value)\n"
-        "5. 📡 **Live Feed** — real-time scoring stream\n"
-        "6. 📈 **Monitoring** — drift detection & automated retraining (operations)\n"
-        "7. 🧪 **API Tester** — score a transaction through the live API (serving)"
+        "1. 💰 **Cost & ROI** — what detection is worth in € vs. naive baselines (the value)\n"
+        "2. 📡 **Live Feed** — real-time scoring stream\n"
+        "3. 📈 **Monitoring** — drift detection & automated retraining (operations)\n"
+        "4. 🧪 **API Tester** — score a transaction through the live API (serving)"
     )
 
 

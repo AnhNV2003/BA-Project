@@ -76,11 +76,12 @@ def sample_mode_note() -> None:
     sample because the full context frame is absent — so approximate figures on
     a fresh clone are never mistaken for production numbers."""
     import streamlit as st
-    if context_is_sample():
+    if scored_context_is_sample():
         st.caption(
             "⚠️ **Sample mode** — computed on the committed ~300k-row stratified "
-            "sample (the full frame is absent). Figures are approximate; rebuild "
-            "`transactions_context.parquet` (see docs/data_setup.md) for full numbers."
+            "sample (neither the precomputed test split nor the full frame is "
+            "present). Figures are approximate; rebuild the dataset (see "
+            "docs/data_setup.md) for full numbers."
         )
 
 
@@ -88,6 +89,10 @@ CONTEXT_PARQUET = DATA_PROCESSED / "transactions_context.parquet"
 # Small, committed fallback (~28MB) so a fresh clone runs the whole app without
 # rebuilding the ~526MB full frame. Stratified -> preserves the real fraud rate.
 CONTEXT_SAMPLE = DATA_PROCESSED / "context_sample.parquet"
+# Precomputed, committed scored test split (~full-data-accurate) so the Overview
+# and Cost pages load in ~1s instead of enriching+scoring the full frame live.
+# Regenerate: python src/make_scored_test.py
+SCORED_TEST = DATA_PROCESSED / "scored_test.parquet"
 
 
 def resolve_context_path():
@@ -109,6 +114,14 @@ def context_is_sample() -> bool:
     return not CONTEXT_PARQUET.exists() and CONTEXT_SAMPLE.exists()
 
 
+def scored_context_is_sample() -> bool:
+    """True when `get_scored_context()` can only use the approximate sample — i.e.
+    neither the precomputed full-data test split nor the full frame is present."""
+    return (not SCORED_TEST.exists()
+            and not CONTEXT_PARQUET.exists()
+            and CONTEXT_SAMPLE.exists())
+
+
 @st.cache_data
 def get_scored_context():
     """Score the labelled **held-out test set** once (cached) for the cost,
@@ -120,11 +133,14 @@ def get_scored_context():
     frame first so the causal dest-history features for test rows correctly see
     the prior history, then we filter — matching how the model was trained.
 
-    Falls back to the small committed sample when the full frame is absent (see
-    `context_is_sample()`); numbers are then approximate but structurally real.
+    Fast path: if the precomputed `scored_test.parquet` (built by
+    `src/make_scored_test.py`) is present, read it directly (~1s) instead of
+    enriching+scoring the full frame live (~10 min). Otherwise compute it live,
+    falling back to the small committed sample when the full frame is absent (see
+    `scored_context_is_sample()`); sample numbers are approximate but real.
 
-    Returns (df, keys): per-model `*_score` columns, `agg_decision`, a `risk` =
-    max-across-models score, plus the original `isFraud` and `amount`.
+    Returns (df, keys): per-model `*_score`/`*_decision` columns, `agg_decision`,
+    a `risk` = max-across-models score, plus the original `isFraud` and `amount`.
     """
     import pandas as pd
     from ensemble import score_batch
@@ -132,6 +148,11 @@ def get_scored_context():
 
     bundle = get_ensemble()
     keys = model_keys(bundle)
+
+    # Fast path — precomputed, already test-split-filtered and scored.
+    if SCORED_TEST.exists():
+        return pd.read_parquet(SCORED_TEST), keys
+
     path, _ = resolve_context_path()
     ctx = pd.read_parquet(path).reset_index(drop=True)
     enriched = enrich(ctx, use_dest_history=True)
