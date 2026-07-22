@@ -9,7 +9,6 @@ Usage
 Outputs
 -------
     data/processed/transactions_context.parquet
-    data/processed/sample_preview.csv
 """
 from __future__ import annotations
 
@@ -38,9 +37,6 @@ def build(frac: float | None = 0.15, full: bool = False) -> None:
         aug.to_csv(saved, index=False)
         print(f"[build] parquet unavailable ({exc}); wrote CSV")
 
-    preview = DATA_PROCESSED / "sample_preview.csv"
-    aug.sample(n=min(2000, len(aug)), random_state=0).to_csv(preview, index=False)
-
     synth_cols = [c for c in aug.columns if c not in base_cols]
     elapsed = time.perf_counter() - started
     print("\n=== PAYSIM BUILD SUMMARY ===")
@@ -49,7 +45,6 @@ def build(frac: float | None = 0.15, full: bool = False) -> None:
     print(f"fraud       : {int(aug['isFraud'].sum()):,}  ({aug['isFraud'].mean():.4%})")
     print(f"synth cols  : {', '.join([c for c in FIELD_META if c in aug.columns])}")
     print(f"saved       : {saved.relative_to(saved.parents[2])}")
-    print(f"preview     : {preview.relative_to(preview.parents[2])}")
     print(f"elapsed     : {elapsed:.1f}s")
 
 

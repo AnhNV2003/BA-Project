@@ -1,8 +1,11 @@
 """Fraud-detection application (Module 6) — multipage Streamlit.
 
 Pages:
-  🛡️ Review Queue — all 3 models score each transaction; triage by max-risk.
+  🏠 Overview     — executive summary scored on the held-out test split.
+  💰 Cost & ROI   — cost-optimal threshold and € value of the model.
+  📡 Live Feed    — real-time simulated transaction stream, scored live.
   📈 Monitoring   — drift dashboard (Reports + Live tabs), per-model prediction drift.
+  🧪 API Tester   — call the in-process scoring API.
 
 Run:
     streamlit run app/streamlit_app.py
@@ -14,10 +17,7 @@ import streamlit as st
 import app_common  # noqa: F401,E402
 import embedded_api  # noqa: E402
 import home_view  # noqa: E402
-import review_view  # noqa: E402
 import cost_view  # noqa: E402
-import eval_view  # noqa: E402
-import segment_view  # noqa: E402
 import monitoring_view  # noqa: E402
 import live_view  # noqa: E402
 import api_tester_view  # noqa: E402
@@ -62,14 +62,11 @@ st.sidebar.markdown(
 st.sidebar.divider()
 
 nav = st.navigation([
-    # Order tells the capstone story: pitch → problem → product → rigor → value →
-    # real-time → operations → serving. Explicit url_path is required: the page
-    # callables are all named `render`, so Streamlit would otherwise infer the
-    # same pathname for each and reject it.
+    # Order tells the capstone story: pitch → value → real-time → operations →
+    # serving. Explicit url_path is required: the page callables are all named
+    # `render`, so Streamlit would otherwise infer the same pathname for each
+    # and reject it.
     st.Page(home_view.render, title="Overview", icon="🏠", url_path="overview", default=True),
-    st.Page(segment_view.render, title="Segment Analytics", icon="🔎", url_path="segments"),
-    st.Page(review_view.render, title="Review Queue", icon="🛡️", url_path="review"),
-    st.Page(eval_view.render, title="Model Evaluation", icon="📊", url_path="evaluation"),
     st.Page(cost_view.render, title="Cost & ROI", icon="💰", url_path="cost"),
     st.Page(live_view.render, title="Live Feed", icon="📡", url_path="live"),
     st.Page(monitoring_view.render, title="Monitoring", icon="📈", url_path="monitoring"),

@@ -67,17 +67,14 @@ Or run steps 1-5 together: `./train.sh full` (full 6.36M rows) / `./train.sh sam
 
 ## Streamlit demo app
 
-`python -m streamlit run app/streamlit_app.py` opens an eight-page product built around a
+`python -m streamlit run app/streamlit_app.py` opens a five-page product built around a
 **3-model ensemble** (Logistic Regression · Random Forest · XGBoost) with a **max-risk**
 aggregate decision (`block > review > allow`). The sidebar is ordered as a presentation
-narrative — pitch → problem → product → rigor → value → operations → serving:
+narrative — pitch → value → real-time → operations → serving:
 
 | Page | What it shows | Data |
 |---|---|---|
 | 🏠 **Overview** | Executive KPIs — € saved, fraud loss avoided, recall/precision, model health | held-out test |
-| 🔎 **Segment Analytics** | Where fraud concentrates: by type, hour, amount + risk-factor **lift** | full population |
-| 🛡️ **Review Queue** | Triage transactions with per-transaction **reason codes** ("why flagged") | 2k sample |
-| 📊 **Model Evaluation** | AUC-PR/ROC/PR curves, confusion matrix, cumulative-gains/lift | held-out test |
 | 💰 **Cost & ROI** | Prices the fraud/friction trade-off in €; per-model vs. ensemble comparison; editable cost matrix | held-out test |
 | 📡 **Live Feed** | Simulated real-time scoring stream | simulated |
 | 📈 **Monitoring** | PSI drift detection → automated retraining + alerting | simulated |
@@ -101,8 +98,9 @@ open port and reuses it.)
 **Deploy on Streamlit Community Cloud:**
 
 1. Commit the runtime files (already handled by `.gitignore` exceptions): the 3-model bundle
-   `models/fraud_ensemble.joblib`, `data/processed/transactions_context.parquet` (~9 MB
-   synthetic stand-in), and `data/processed/sample_preview.csv`.
+   `models/fraud_ensemble.joblib` and `data/processed/context_sample.parquet` (~28 MB
+   stratified sample the analytics pages fall back to when the full ~526 MB
+   `transactions_context.parquet` is absent, e.g. on a fresh clone).
 2. On [share.streamlit.io](https://share.streamlit.io) → **New app**, pick the repo/branch.
 3. Set **Main file path** to `app/streamlit_app.py`.
 4. Deploy — `requirements.txt` and `packages.txt` (`libgomp1`, needed by XGBoost) at the repo
