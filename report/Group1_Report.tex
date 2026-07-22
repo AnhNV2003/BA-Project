@@ -572,7 +572,7 @@ larger amounts (Figure~\ref{fig:amount}). Binning amount into deciles
 
 Fraud has a striking diurnal signature (Figure~\ref{fig:time}, left): the fraud rate peaks
 at roughly \textbf{22\%} in the 04:00–05:00 window and is negligible during the day. The derived
-\code{is\_night} flag captures this - night transactions carry a 1.74\% fraud rate versus
+\code{is\_night} flag captures this - night transactions carry a 1.77\% fraud rate versus
 0.10\% otherwise. The per-day panel (right) shows a spike on the final simulation day; this
 is a low-volume simulation quirk (a handful of rows) rather than a real pattern, and we
 treat it as such.
@@ -588,7 +588,7 @@ treat it as such.
 
 The synthetic risk flags behave as designed (Figure~\ref{fig:flags}, Table~\ref{tab:flags}):
 each of the account/device/context flags roughly doubles-to-triples the fraud rate when set,
-while the temporal \code{is\_night} flag lifts it far more - from 0.10\% to 1.74\%
+while the temporal \code{is\_night} flag lifts it far more - from 0.10\% to 1.77\%
 ($\approx$17$\times$). None is deterministic, however - the overlap engineered via the
 reveal/noise mechanism is visible and intended.
 
@@ -605,11 +605,11 @@ reveal/noise mechanism is visible and intended.
 \toprule
 \textbf{Signal} & \textbf{if 0 \%} & \textbf{if 1 \%}\\
 \midrule
-\code{is\_new\_device} & 0.101 & 0.270\\
-\code{shipping\_billing\_mismatch} & 0.106 & 0.354\\
-\code{is\_disposable\_email} & 0.116 & 0.380\\
-\code{high\_risk\_country} & 0.115 & 0.312\\
-\code{is\_night} & 0.100 & 1.745\\
+\code{is\_new\_device} & 0.102 & 0.268\\
+\code{shipping\_billing\_mismatch} & 0.106 & 0.353\\
+\code{is\_disposable\_email} & 0.116 & 0.365\\
+\code{high\_risk\_country} & 0.114 & 0.320\\
+\code{is\_night} & 0.100 & 1.773\\
 \bottomrule
 \end{tabular}
 \captionof{table}{Fraud rate by flag value.}
@@ -703,12 +703,12 @@ features (Module 4).
 
 \section{Channels and correlations}
 
-Browser and OS carry essentially no fraud signal (rates flat at $\approx$0.12–0.14\%), as
+Browser and OS carry essentially no fraud signal (rates flat at $\approx$0.12–0.13\%), as
 expected from uniform synthetic generation. Billing country does carry signal - the
-high-risk countries RU/ID/NG/CN top the chart at 0.27–0.37\%
+high-risk countries NG/ID/CN/RU top the chart at $\approx$0.32\%
 (Figure~\ref{fig:channels}). Finally, linear correlations with the target
-(Figure~\ref{fig:corr}) are all individually weak ($|r|<0.09$): \code{amount},
-\code{errorBalanceDest}, \code{isFlaggedFraud}, \code{orig\_drained}, and \code{is\_night}
+(Figure~\ref{fig:corr}) are all individually weak ($|r|<0.08$): \code{amount},
+\code{orig\_drained}, \code{is\_night}, \code{errorBalanceDest}, and \code{isFlaggedFraud}
 lead. The weakness of \emph{linear} correlations, contrasted with the strong tree-model
 results later, is itself evidence that fraud here is a non-linear, interaction-driven
 phenomenon.
@@ -1180,8 +1180,9 @@ parity by construction.
 (6.36M-row)} build, and the deployed app (Chapter~\ref{ch:m6}) scores on that same build.
 The trained ensemble bundle ($\approx$60\,MB) is committed to git so the app works
 immediately after clone, but the processed feature dataset ($\approx$526\,MB on full PaySim)
-exceeds GitHub's 100\,MB limit and is regenerated locally by the data pipeline; the
-analytics pages that need the full population rebuild it on first run.
+exceeds GitHub's 100\,MB limit and is regenerated locally by the data pipeline; a committed
+$\approx$26\,MB stratified sample (\code{context\_sample.parquet}) lets a fresh clone run the
+app in \emph{sample mode} without the full rebuild.
 \end{keybox}
 
 %==============================================================================
@@ -1292,7 +1293,8 @@ localhost, so the browser only ever talks to Streamlit (and if a local \code{uvi
 already running, the open port is detected and reused). Deployment then reduces to: commit the
 runtime artefacts (the $\approx$60\,MB ensemble bundle and the preview CSV, kept in git via
 \code{.gitignore} exceptions; the $\approx$526\,MB processed dataset exceeds GitHub's limit and
-is rebuilt locally), point Streamlit Cloud at
+is rebuilt locally, with a committed $\approx$26\,MB stratified sample as a fresh-clone fallback),
+point Streamlit Cloud at
 \code{app/streamlit\_app.py}, and let \code{requirements.txt} and \code{packages.txt}
 (\code{libgomp1} for XGBoost) install automatically.
 
