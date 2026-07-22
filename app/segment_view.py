@@ -13,13 +13,13 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from app_common import CONTEXT_PARQUET, dataset_badge, fmt_money as _money
+from app_common import context_is_sample, dataset_badge, fmt_money as _money, resolve_context_path
 
 
 @st.cache_data
 def _load():
-    df = pd.read_parquet(CONTEXT_PARQUET)
-    return df
+    path, _ = resolve_context_path()
+    return pd.read_parquet(path)
 
 
 def _rate_by(df: pd.DataFrame, col: str) -> pd.DataFrame:
@@ -59,7 +59,7 @@ def render():
     st.title("🔎 Segment Analytics")
     st.caption("Where fraud concentrates across the business — the descriptive picture behind the "
                "model's features.")
-    dataset_badge("full")
+    dataset_badge("sample" if context_is_sample() else "full")
 
     df = _load()
     base_rate = df["isFraud"].mean()

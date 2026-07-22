@@ -14,7 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from app_common import (CURRENCY as CUR, dataset_badge, fmt_money as _money,
-                        get_ensemble, get_scored_context)
+                        get_ensemble, get_scored_context, sample_mode_note)
 import costs
 
 ENSEMBLE_LABEL = "Ensemble (max-risk)"
@@ -33,6 +33,7 @@ def render():
     st.caption("Fraud detection is a **cost-optimization** problem. Every threshold trades "
                "missed-fraud loss against false-alarm friction — this page prices that trade in €.")
     dataset_badge("test")
+    sample_mode_note()
 
     df, keys = get_scored_context()
     y = df["isFraud"].to_numpy()

@@ -13,9 +13,12 @@ data/raw/*
 # Big processed datasets — regenerate: ./scripts/get_data.sh
 # NOTE: transactions_context.parquet used to be whitelisted here (~9MB on the
 # 100k stand-in), but on the REAL full PaySim data it is ~526MB and exceeds
-# GitHub's 100MB hard limit. It is now gitignored like the others; the
-# cost/eval/segment analytics pages require rebuilding it locally.
+# GitHub's 100MB hard limit. It is now gitignored like the others.
 data/processed/*.parquet
+# ...EXCEPT the small (~28MB) stratified sample the app falls back to when the
+# full frame is absent, so a fresh clone runs every page (in "sample mode").
+# Regenerate: python src/make_context_sample.py
+!data/processed/context_sample.parquet
 
 # Synthetic caches (regenerate on first run) — customer master + stand-in
 data/synthetic/*

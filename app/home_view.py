@@ -11,7 +11,7 @@ import pandas as pd
 import streamlit as st
 
 import drift
-from app_common import dataset_badge, fmt_money as _money, get_ensemble, get_scored_context, model_keys
+from app_common import dataset_badge, fmt_money as _money, get_ensemble, get_scored_context, model_keys, sample_mode_note
 import costs
 from reasons import reason_series
 
@@ -23,6 +23,7 @@ def render():
     st.caption("A multi-model decision system that scores every payment in real time, prices the "
                "fraud/friction trade-off in €, explains each flag, and monitors itself for drift.")
     dataset_badge("test")
+    sample_mode_note()
 
     bundle = get_ensemble()
     df, keys = get_scored_context()

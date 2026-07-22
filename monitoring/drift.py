@@ -95,6 +95,10 @@ def distribution_frame(ref, cur, bins: int = 10) -> pd.DataFrame:
 def load():
     p = DATA_PROCESSED / "transactions_context.parquet"
     if not p.exists():
+        # Small committed fallback so a fresh clone runs without the ~526MB frame.
+        sample = DATA_PROCESSED / "context_sample.parquet"
+        if sample.exists():
+            return pd.read_parquet(sample)
         p = p.with_suffix(".csv")
     return pd.read_parquet(p) if p.suffix == ".parquet" else pd.read_csv(p)
 

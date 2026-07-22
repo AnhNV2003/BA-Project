@@ -15,7 +15,7 @@ import streamlit as st
 from sklearn.metrics import (average_precision_score, precision_recall_curve,
                              precision_recall_fscore_support, roc_auc_score, roc_curve)
 
-from app_common import dataset_badge, get_ensemble, get_scored_context
+from app_common import dataset_badge, get_ensemble, get_scored_context, sample_mode_note
 
 _PALETTE = ["#1565C0", "#2E7D32", "#8E24AA", "#EF6C00", "#C62828"]
 
@@ -74,6 +74,7 @@ def render():
     st.title("📊 Model Evaluation")
     st.caption("How well the models separate fraud from legit, independent of the operating threshold.")
     dataset_badge("test")
+    sample_mode_note()
 
     bundle = get_ensemble()
     df, keys = get_scored_context()

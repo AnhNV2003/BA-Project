@@ -73,6 +73,26 @@ Each file lets you skip everything upstream of it. `fraud_model.joblib` alone
 is enough to run the API/demo (`uvicorn api.main:app`) without any of the
 others — it bundles the model, transformer, threshold, and feature schema.
 
+## Running the app on a fresh clone (no full dataset)
+
+`transactions_context.parquet` is ~526MB on the real full data and is **not**
+committed (GitHub's 100MB limit). To keep a bare clone runnable, a small
+**stratified sample** `data/processed/context_sample.parquet` (~28MB, ~300k
+rows, real fraud rate preserved) **is** committed. The Streamlit analytics
+pages (home / evaluation / cost / segment) and the monitoring view fall back to
+it automatically when the full frame is absent, and badge themselves as
+**"sample mode"** (approximate figures). So right after `git clone` the entire
+app runs — the model bundles are committed too.
+
+Rebuild the full frame any time for production-accurate numbers:
+```bash
+python src/build_dataset.py --full     # -> transactions_context.parquet (526MB)
+```
+Regenerate the committed sample after rebuilding the full frame:
+```bash
+python src/make_context_sample.py      # -> context_sample.parquet (~28MB)
+```
+
 ## Verifying you rebuilt the right thing
 
 ```bash
