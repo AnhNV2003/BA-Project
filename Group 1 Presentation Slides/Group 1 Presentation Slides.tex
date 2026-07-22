@@ -1,0 +1,471 @@
+\documentclass[t, aspectratio=169]{beamer} % 16:9 aspect ratio
+
+% --- Language / encoding (English deck, Vietnamese author names) ------
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}   % T5 covers Vietnamese diacritics (Lương, Thảo, ...)
+\usepackage[english]{babel}
+\usepackage{lmodern}
+
+% --- Math & tables ---------------------------------------------------
+\usepackage{amsthm,amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{colortbl}
+\usepackage{graphicx}
+
+% --- Charts ----------------------------------------------------------
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+% --- MARGIN CONFIG (must be set before loading the theme) ------------
+\def\slideContentLeftMargin{0.7cm}  % Left margin
+\def\slideContentRightMargin{0.9cm} % Right margin
+\def\hustHeaderHeight{1cm}          % Top margin (clears the title bar)
+\def\slideContentBotMargin{3cm}     % Bottom margin (clears the footer logo)
+
+% Change [blue] to [red] to switch colour; keep [169] in sync with documentclass.
+\usepackage[blue, 169]{beamerthemeHUST}
+
+% --- Title-page layout tweaks ---------------------------------------
+\renewcommand{\titlePageTitleX}{-0.3cm}
+\renewcommand{\titlePageTitleY}{-0.35cm}
+\renewcommand{\hustTitleAlign}{\alignLeft}
+\renewcommand{\hustSubtitleAlign}{\alignLeft}
+\renewcommand{\hustAuthorAlign}{\alignLeft}
+\renewcommand{\hustInstAlign}{\alignLeft}
+
+% --- Accent colours & block styling ---------------------------------
+\definecolor{hustred}{HTML}{ce1628}
+\setbeamertemplate{blocks}[rounded][shadow=false]
+\setbeamercolor{block title}{bg=hustprimary,fg=white}
+\setbeamercolor{block body}{bg=hustprimary!7,fg=black}
+\setbeamercolor{block title alerted}{bg=hustred,fg=white}
+\setbeamercolor{block body alerted}{bg=hustred!7,fg=black}
+\setbeamercolor{block title example}{bg=black!62,fg=white}
+\setbeamercolor{block body example}{bg=black!5,fg=black}
+\setbeamercolor{itemize item}{fg=hustprimary}
+\setbeamercolor{itemize subitem}{fg=hustprimary}
+\setbeamercolor{enumerate item}{fg=hustprimary}
+\setbeamercolor{alerted text}{fg=hustred}
+\setbeamerfont{block title}{size=\normalsize}
+\setbeamertemplate{itemize item}{\small\raise0.5pt\hbox{\textbullet}}
+\renewcommand{\arraystretch}{1.15}
+
+% --- Nicer table-of-contents entries (blue number badges) ------------
+\newcommand{\tocbadge}[1]{%
+  \tikz[baseline=(c.base)]{%
+    \node[fill=hustprimary,text=white,rounded corners=3pt,
+          minimum size=1.6em,inner sep=0pt,font=\bfseries] (c) {#1};}}
+\setbeamertemplate{section in toc}{%
+  \vskip0.72em%
+  \leavevmode%
+  \tocbadge{\inserttocsectionnumber}\hspace{0.9em}%
+  {\usebeamerfont{section in toc}\usebeamercolor[fg]{toc text}\large \inserttocsection}%
+  \par%
+}
+
+% A compact highlight row colour for the winning model
+\newcommand{\winrow}{\rowcolor{hustprimary!16}}
+
+% --- Title metadata --------------------------------------------------
+\title{Real-Time Payment Fraud Detection\\ for an E-Commerce Platform}
+\subtitle{An End-to-End Business Intelligence Pipeline on PaySim}
+\author{\texorpdfstring{%
+\small Lương Minh Dương (20251038M)\, $\cdot$\, Trần Lê Phương Thảo (20251186M)\\[1pt]
+\small Hoàng Minh Hoàng (20252561M)\, $\cdot$\, Ngô Việt Anh (20252570M)\\[1pt]
+\small Phạm Tuấn Kiệt (20252751M)\, $\cdot$\, Nguyễn Như Thái (20252270M)%
+}{Group 1}}
+\institute{Group 1 $\cdot$ Business Intelligence (IT5315E) $\cdot$ HUST}
+
+\begin{document}
+
+\hustintropage{} % Branded opening splash (decorative)
+
+% ===================================================================
+% TITLE + OUTLINE
+% ===================================================================
+\husttitlepage
+
+\begin{frame}[t]{Outline}
+	\vspace*{0.15cm}
+	\tableofcontents
+\end{frame}
+
+\resetPageCount  % Title = page 1
+\showPageNumber  % Show page numbers from here on
+
+\useStyleFull
+\useThinBar
+
+% ===================================================================
+% PART 1 - BUSINESS PROBLEM & COST MODEL
+% ===================================================================
+\section{Business Problem \& Cost Model}
+\hustsectionpage{Business Problem \& Cost Model}
+
+\begin{frame}{The Problem: Fraud is a Needle in a Haystack}
+	\begin{block}{Setting}
+		A payment platform must decide, \alert{at authorization time} (before
+		money moves), whether each transaction is fraudulent - in milliseconds,
+		with only what is known \emph{before} the transaction settles.
+	\end{block}
+	\begin{columns}[T]
+		\begin{column}{0.5\textwidth}
+			\textbf{Why it is hard}
+			\begin{itemize}
+				\item Fraud is \alert{0.129\%} of traffic - a \textbf{774:1}
+				      imbalance (8{,}213 of 6.36M).
+				\item A model that flags \emph{nothing} is already
+				      \textbf{99.87\%} accurate - and useless.
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.5\textwidth}
+			\textbf{Why it matters}
+			\begin{itemize}
+				\item Total fraud exposure: \alert{12.06 billion} currency units.
+				\item A missed fraud costs the \emph{full} amount; a false alarm
+				      costs only friction and a little review labour.
+			\end{itemize}
+		\end{column}
+	\end{columns}
+	\vspace{0.3em}
+	\centering\small\emph{So accuracy is the wrong target - the real question
+	is how much money we save, at what operational cost.}
+\end{frame}
+
+\begin{frame}{Cost-Based Framing, not Accuracy}
+	\begin{block}{We minimise an expected cost that turns a three-sided trade-off into one number}
+		\[
+		  \text{Cost} = \underbrace{c_{FN}\!\!\sum_{i\in FN}\!\text{amount}_i}_{\text{missed fraud}}
+		  + \underbrace{c_{FP}\cdot|FP|}_{\text{friction}}
+		  + \underbrace{c_{MR}\cdot|\text{flagged}|}_{\text{review labour}}
+		\]
+	\end{block}
+	\begin{columns}[T]
+		\begin{column}{0.54\textwidth}
+			\begin{itemize}
+				\item $c_{FN}=1.0\times$amount, $c_{FP}=25$, $c_{MR}=3$
+				      (kept in \texttt{src/config.py}).
+				\item The ratio fixes a \alert{break-even amount of 25}: block
+				      whenever the amount at risk exceeds 25 units.
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.46\textwidth}
+			\begin{alertblock}{KPIs that pull against each other}
+				\begin{itemize}
+					\item \textbf{Loss avoided} (north-star, in money).
+					\item \textbf{False-positive rate} (customer friction).
+					\item \textbf{Review-queue volume} (a hard capacity limit).
+				\end{itemize}
+			\end{alertblock}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+% ===================================================================
+% PART 2 - DATA & EXPLORATORY INSIGHTS
+% ===================================================================
+\section{Data \& Exploratory Insights}
+\hustsectionpage{Data \& Exploratory Insights}
+
+\begin{frame}{Data: PaySim + a Synthetic Contextual Layer}
+	\begin{columns}[T]
+		\begin{column}{0.56\textwidth}
+			\begin{itemize}
+				\item \textbf{PaySim}: 6{,}362{,}620 mobile-money transactions,
+				      \alert{8{,}213 fraud} (0.129\%), 743 hourly steps.
+				\item PaySim has \emph{no} device / geo / account context, so we
+				      add a \textbf{synthetic layer} (Faker): device, IP-billing
+				      distance, disposable email, high-risk country,
+				      shipping/billing mismatch, night flag.
+				\item Context is attached with \texttt{reveal\_rate}=0.55 and
+				      \texttt{legit\_noise}=0.04 - signal is realistic, not perfect.
+			\end{itemize}
+		\end{column}
+		\begin{column}{0.44\textwidth}
+			\centering
+			\includegraphics[height=4.1cm]{01_class_imbalance.png}\\[1pt]
+			{\scriptsize Class imbalance (log scale): fraud is a thin sliver.}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+\begin{frame}{What the Data Reveals (1): Where and How Much}
+	\begin{columns}[T]
+		\begin{column}{0.46\textwidth}
+			\centering
+			\includegraphics[height=4.2cm]{02_fraud_by_type.png}
+		\end{column}
+		\begin{column}{0.54\textwidth}
+			\begin{itemize}
+				\item Fraud appears \alert{only} in \textbf{TRANSFER} (0.77\%)
+				      and \textbf{CASH\_OUT} (0.18\%) - the cash-exit channels.
+				\item Zero fraud in PAYMENT / CASH\_IN / DEBIT $\Rightarrow$ we
+				      can screen out \textbf{$\sim$60\% of traffic for free}.
+				\item Fraud concentrates in \textbf{large amounts}: the top
+				      amount decile carries a 0.69\% fraud rate.
+				\item \textbf{Night} transactions: 1.77\% fraud vs 0.10\% by day
+				      - a behavioural signature of automated attacks.
+			\end{itemize}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+\begin{frame}{What the Data Reveals (2): The Leakage Trap}
+	\begin{columns}[T]
+		\begin{column}{0.44\textwidth}
+			\centering
+			\includegraphics[width=\linewidth,height=4cm,keepaspectratio]{08_balance_signature.png}
+		\end{column}
+		\begin{column}{0.56\textwidth}
+			\begin{alertblock}{A signal that looks perfect - but cheats}
+				Balance-reconciliation features reach single-feature
+				\textbf{AUC 0.92}, yet they are computed from
+				\emph{post-transaction} balances - unknown at auth time.
+			\end{alertblock}
+			\begin{itemize}
+				\item Using them is \alert{target leakage} - the score is a
+				      \emph{consequence} of fraud, not a predictor.
+				\item The real test: \textbf{is this feature available when we
+				      must decide?}
+				\item This splits features into \textbf{leaky} vs
+				      \textbf{deployable} groups - our central design choice.
+			\end{itemize}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+% ===================================================================
+% PART 3 - FEATURES, MODELS & EVALUATION
+% ===================================================================
+\section{Features, Models \& Evaluation}
+\hustsectionpage{Features, Models \& Evaluation}
+
+\begin{frame}{Features \& Imbalance Handling}
+	\begin{columns}[T]
+		\begin{column}{0.52\textwidth}
+			\begin{block}{Leakage-aware feature groups}
+				\begin{itemize}
+					\item \textbf{Leaky} (\emph{base} 18, \emph{all} 50):
+					      post-transaction balances - reference only.
+					\item \textbf{Deployable} (\emph{dest} 16, \emph{synth} 21,
+					      \alert{\emph{realistic} 44}): available at auth time.
+					\item Destination history is aggregated \textbf{causally}
+					      (past transactions only - no future leakage).
+				\end{itemize}
+			\end{block}
+		\end{column}
+		\begin{column}{0.48\textwidth}
+			\begin{block}{Handling 774:1 imbalance}
+				\begin{itemize}
+					\item Class weighting / \texttt{scale\_pos\_weight}, not naive
+					      resampling.
+					\item \textbf{Time-based split}: train steps 1-323, val
+					      323-378, test 378-743 - train on the past, test on the
+					      future.
+					\item Correlations are all $|r|<0.08$: fraud is a
+					      \alert{non-linear} phenomenon.
+				\end{itemize}
+			\end{block}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+\useStyleLogoOnly
+\begin{frame}{Model Results \& the ``Leakage Tax''}
+	\begin{columns}[T]
+		\begin{column}{0.56\textwidth}
+			\centering
+			\footnotesize
+			\textbf{Test AUC-PR on deployable features}\\[3pt]
+			\resizebox{\linewidth}{!}{%
+			\begin{tikzpicture}
+			\begin{axis}[
+				xbar, bar width=13pt,
+				width=9cm, height=3.9cm,
+				enlarge y limits=0.32,
+				xmin=0, xmax=1.05,
+				symbolic y coords={LogReg,Random Forest,XGBoost},
+				ytick=data,
+				nodes near coords, nodes near coords align={horizontal},
+				every node near coord/.append style={font=\scriptsize},
+				tick label style={font=\footnotesize},
+				xlabel={}, axis lines=left,
+			]
+			\addplot[fill=hustprimary,draw=hustprimary] coordinates
+			  {(0.587,LogReg) (0.812,Random Forest) (0.907,XGBoost)};
+			\end{axis}
+			\end{tikzpicture}}
+			\vspace{0.2em}
+
+			{\scriptsize On \emph{leaky} features every model scores AUC-PR
+			$\approx$1.0 - the \alert{leakage tax} is the gap down to 0.907.}
+		\end{column}
+		\begin{column}{0.44\textwidth}
+			\scriptsize
+			\setlength{\tabcolsep}{3.2pt}
+			\begin{tabular}{l c c c}
+				\toprule
+				\textbf{Model} & \textbf{AUC-PR} & \textbf{Recall} & \textbf{Flagged} \\
+				\midrule
+				LogReg        & 0.587 & 0.997 & 16.8\% \\
+				Random Forest & 0.812 & 0.953 & 4.8\% \\
+				\winrow \textbf{XGBoost} & \textbf{0.907} & \textbf{0.981} & \textbf{2.4\%} \\
+				\bottomrule
+			\end{tabular}
+			\vspace{0.5em}
+
+			\textbf{XGBoost} wins: high recall while flagging the \emph{least}
+			traffic. Trees capture the non-linear interactions that a linear
+			model (recall$\approx$1 but 16.8\% flagged) cannot.
+		\end{column}
+	\end{columns}
+\end{frame}
+\useStyleFull
+
+\begin{frame}{Operating Point \& the Max-Risk Ensemble}
+	\begin{columns}[T]
+		\begin{column}{0.52\textwidth}
+			\begin{block}{Cost-selected threshold = 0.241}
+				\begin{itemize}
+					\item Recall \alert{0.981}, precision \alert{0.173}, flagging
+					      only \textbf{2.38\%} of traffic.
+					\item Intercepts \alert{99.91\%} of fraud value (loss avoided).
+				\end{itemize}
+			\end{block}
+			\small Low precision is \textbf{by design}: with a break-even of 25,
+			5 cheap false alarms are worth 1 six-figure catch. Precision is a
+			\emph{capacity lever}, not a modelling defect.
+		\end{column}
+		\begin{column}{0.48\textwidth}
+			\begin{alertblock}{3-model max-risk ensemble}
+				\begin{itemize}
+					\item Combine LogReg + RF + XGBoost; take the
+					      \textbf{maximum} risk (most cautious).
+					\item Map to a decision: \textbf{block} $>$ \textbf{review}
+					      $>$ \textbf{allow}, with a block floor at 0.9.
+					\item Every decision carries \textbf{reason codes} for the
+					      review analyst.
+				\end{itemize}
+			\end{alertblock}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+% ===================================================================
+% PART 4 - DEPLOYMENT, MONITORING & POLICY
+% ===================================================================
+\section{Deployment, Monitoring \& Policy}
+\hustsectionpage{Deployment, Monitoring \& Policy}
+
+\begin{frame}{Deployment: Scoring Service + Operator App}
+	\begin{columns}[T]
+		\begin{column}{0.5\textwidth}
+			\begin{block}{Real-time scoring (M6)}
+				\begin{itemize}
+					\item \textbf{FastAPI} \texttt{/score} endpoint; single-port
+					      in-process option for a fresh clone.
+					\item Returns risk, decision (block/review/allow), and reason
+					      codes.
+					\item Review queue prioritised by \alert{expected loss}
+					      (amount $\times$ risk), not raw score.
+				\end{itemize}
+			\end{block}
+		\end{column}
+		\begin{column}{0.5\textwidth}
+			\begin{block}{Streamlit operator app}
+				\begin{itemize}
+					\item 5 pages: \textbf{Overview}, \textbf{Cost \& ROI},
+					      \textbf{Live Feed}, \textbf{Monitoring},
+					      \textbf{API Tester}.
+					\item Turns the pipeline into something an analyst can
+					      \emph{operate}, not just a notebook.
+				\end{itemize}
+			\end{block}
+		\end{column}
+	\end{columns}
+\end{frame}
+
+\begin{frame}{Monitoring, Retraining \& Risk Policy}
+	\begin{columns}[T]
+		\begin{column}{0.5\textwidth}
+			\begin{block}{Keeping the model honest (M7)}
+				\begin{itemize}
+					\item \textbf{PSI drift} per feature; alert when
+					      PSI $>$ \alert{0.25}.
+					\item One-click / automatic \textbf{retraining} on fresh data;
+					      version badge + audit log.
+					\item Outbound \textbf{webhook alerts} on drift / decay.
+				\end{itemize}
+			\end{block}
+		\end{column}
+		\begin{column}{0.5\textwidth}
+			\begin{block}{Risk policy (M8)}
+				\begin{itemize}
+					\item \textbf{Auto-block} the highest-risk band (floor 0.9).
+					\item \textbf{Human review} the mid band, queued by expected
+					      loss.
+					\item \textbf{Allow} the low band - keep good customers
+					      frictionless.
+				\end{itemize}
+			\end{block}
+		\end{column}
+	\end{columns}
+	\vspace{0.2em}
+	\centering\small\emph{The threshold is a business dial, re-tuned as costs and
+	drift change - not a fixed constant.}
+\end{frame}
+
+% ===================================================================
+% PART 5 - CONCLUSION
+% ===================================================================
+\section{Conclusion}
+\hustsectionpage{Conclusion}
+
+\begin{frame}{Conclusion}
+	\begin{itemize}
+		\item We built a \textbf{full BI lifecycle} (M1-M8): business framing,
+		      EDA, cleaning, leakage-aware features, modelling, deployment,
+		      monitoring, and risk policy.
+		\item The winning model - \textbf{XGBoost on deployable features} -
+		      intercepts \alert{99.91\%} of fraud value while flagging only
+		      \textbf{2.38\%} of traffic (recall 0.981).
+		\item The key discipline is \textbf{leakage awareness}: an offline
+		      AUC of $\sim$1.0 is a trap; only features available at
+		      authorization time count.
+	\end{itemize}
+	\begin{block}{One line}
+		Fraud detection is a \textbf{cost-optimisation} problem - its optimum is
+		deliberately high-recall, low-precision, and re-tuned as the business
+		and the data drift.
+	\end{block}
+\end{frame}
+
+\begin{frame}{Team \& Role Distribution}
+	\centering
+	\footnotesize
+	\setlength{\tabcolsep}{5pt}
+	\begin{tabular}{@{}l l p{8.3cm}@{}}
+		\toprule
+		\textbf{Member} & \textbf{Student ID} & \textbf{Role \& responsibilities} \\
+		\midrule
+		Lương Minh Dương    & 20251038M & Data Engineer - data generation, dictionary, cleaning \\
+		Trần Lê Phương Thảo & 20251186M & Data Analyst - EDA, fraud-pattern visualization, presentation \\
+		Hoàng Minh Hoàng    & 20252561M & ML Engineer - features, classifier, inference pipeline \\
+		Ngô Việt Anh        & 20252570M & ML Engineer - imbalance, cost-based eval, leakage-aware pipeline \\
+		Phạm Tuấn Kiệt      & 20252751M & MLOps Lead - deployment (API + review queue), drift, final report \\
+		Nguyễn Như Thái     & 20252270M & MLOps / Reporting - demo app, monitoring, final report \\
+		\bottomrule
+	\end{tabular}
+	\vspace{0.8em}
+
+	\normalsize All code authored by the team; pipeline reproducible from a
+	single fixed seed (\texttt{SEED=42}).
+\end{frame}
+
+% ===================================================================
+% CLOSING
+% ===================================================================
+\hustthankyou
+
+\end{document}
