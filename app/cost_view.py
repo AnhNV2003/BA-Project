@@ -1,4 +1,4 @@
-"""Cost & ROI page — reframe fraud detection as a money decision.
+"""Cost & ROI page  reframe fraud detection as a money decision.
 
 Fraud detection is a cost-optimization problem: every decision trades the cost
 of a missed fraud (≈ the transaction amount) against the cost of a false alarm
@@ -14,7 +14,7 @@ import pandas as pd
 import streamlit as st
 
 from app_common import (CURRENCY as CUR, dataset_badge, fmt_money as _money,
-                        get_ensemble, get_scored_context, sample_mode_note)
+                        get_ensemble, get_scored_context, headline_key, sample_mode_note)
 import costs
 
 ENSEMBLE_LABEL = "Ensemble (max-risk)"
@@ -31,7 +31,7 @@ def _confusion_df(r: costs.CostResult) -> pd.DataFrame:
 def render():
     st.title("💰 Cost & ROI")
     st.caption("Fraud detection is a **cost-optimization** problem. Every threshold trades "
-               "missed-fraud loss against false-alarm friction — this page prices that trade in €.")
+               "missed-fraud loss against false-alarm friction  this page prices that trade in €.")
     dataset_badge("test")
     sample_mode_note()
 
@@ -42,19 +42,19 @@ def render():
     # ---- Editable cost matrix (defaults come from config.py) ---------------- #
     with st.expander("⚙️ Cost assumptions (edit for sensitivity analysis)", expanded=False):
         st.caption("Defaults are the team's assumptions in `config.py`. Change them to see how "
-                   "the business case shifts — this is the sensitivity analysis your report needs.")
-        cc = st.columns(3)
-        c_fn = cc[0].number_input(
-            f"Missed-fraud cost  (× amount)", value=costs.DEFAULT_FN, step=0.1, min_value=0.0,
-            help="A missed fraud loses ≈ the transaction amount. Weight per € of amount lost.")
-        c_fp = cc[1].number_input(
+                   "the business case shifts  this is the sensitivity analysis your report needs.")
+        st.caption(f"A missed fraud is priced at **1× the transaction amount** (the money lost). "
+                   "Adjust the two operating costs below.")
+        cc = st.columns(2)
+        c_fp = cc[0].number_input(
             f"False-alarm cost  ({CUR} each)", value=costs.DEFAULT_FP, step=1.0, min_value=0.0,
             help="Blocking a good customer: lost sale + friction + possible churn.")
-        c_review = cc[2].number_input(
+        c_review = cc[1].number_input(
             f"Manual-review cost  ({CUR} each)", value=costs.DEFAULT_REVIEW, step=0.5, min_value=0.0,
             help="Analyst labour to work one flagged transaction.")
 
-    kw = dict(c_fn=c_fn, c_fp=c_fp, c_review=c_review)
+    # Missed-fraud cost is fixed at 1× amount (config.COST_FALSE_NEGATIVE).
+    kw = dict(c_fn=costs.DEFAULT_FN, c_fp=c_fp, c_review=c_review)
 
     # ---- Model chooser: ensemble or any single model ----------------------- #
     bundle = get_ensemble()
@@ -69,18 +69,23 @@ def render():
         key = next(k for k, n in name_by_key.items() if n == choice)
         return df[f"{key}_decision"].to_numpy() != "allow"
 
-    choice = st.selectbox("Score the business impact of:", options, index=0,
+    # Default to a strong single model (XGBoost) rather than the max-risk ensemble:
+    # the ensemble union catches ~100% of fraud loss but at very low precision, which
+    # reads as unrealistic as a headline. The ensemble stays selectable below.
+    default_choice = name_by_key.get(headline_key(bundle), ENSEMBLE_LABEL)
+    choice = st.selectbox("Score the business impact of:", options,
+                          index=options.index(default_choice),
                           help="Compare each model's economics against the deployed max-risk ensemble.")
     sel = costs.cost_breakdown(y, _flagged_for(choice), amount, **kw)
 
     label = "ensemble" if choice == ENSEMBLE_LABEL else choice
-    st.subheader(f"{choice} — business impact")
+    st.subheader(f"{choice}  business impact")
     st.caption(f"On {sel.n:,} transactions carrying {_money(sel.fraud_exposure)} of fraud exposure "
                f"({sel.n_fraud} fraudulent).")
     k = st.columns(4)
     k[0].metric("💶 Net savings vs. no model", _money(sel.net_savings),
                 help="Money saved versus letting every transaction through (the do-nothing baseline).")
-    k[1].metric("🛡️ Fraud loss avoided", f"{sel.loss_avoided_pct:.0f}%",
+    k[1].metric("🛡️ Fraud loss avoided", f"{sel.loss_avoided_pct:.1f}%",
                 delta=_money(sel.caught_amount), help="Share of € fraud exposure the model prevents.")
     k[2].metric("💸 Fraud still missed", _money(sel.missed_amount),
                 delta=f"-{sel.fn} cases", delta_color="inverse")
@@ -88,7 +93,7 @@ def render():
                 help="Net savings per € spent on false alarms + manual review.")
 
     # ---- Baseline comparison bar (selected model) -------------------------- #
-    st.markdown(f"**Total cost vs. naive strategies** ({label}) — lower is better")
+    st.markdown(f"**Total cost vs. naive strategies** ({label})  lower is better")
     comp = pd.DataFrame({
         "Strategy": ["Do nothing\n(allow all)", "Review everything\n(no ML)", f"{label}"],
         "Total cost": [sel.do_nothing_cost, sel.review_all_cost, sel.model_cost],
@@ -110,7 +115,7 @@ def render():
         st.dataframe(cm.style.format("{:,}"), use_container_width=True)
         breakdown = pd.DataFrame({
             "Component": ["Missed-fraud loss (FN)", "False-alarm cost (FP)", "Manual-review labour",
-                          "— Total model cost", "Do-nothing baseline", "Net savings"],
+                          " Total model cost", "Do-nothing baseline", "Net savings"],
             "Amount": [-sel.fn_loss, -sel.fp_cost, -sel.review_cost,
                        -sel.model_cost, -sel.do_nothing_cost, sel.net_savings],
         })
@@ -124,7 +129,7 @@ def render():
     # ---- All models vs. ensemble side by side ------------------------------ #
     st.subheader("All models vs. ensemble")
     st.caption("Every model priced on the same cost assumptions. The max-risk **ensemble maximizes "
-               "recall** (it flags if *any* model flags) and is robust when one model degrades — but "
+               "recall** (it flags if *any* model flags) and is robust when one model degrades  but "
                "that union also inherits every model's false alarms, so its precision (and sometimes "
                "net savings) can trail the best single model on clean data. Read the trade-off, don't "
                "assume a winner.")

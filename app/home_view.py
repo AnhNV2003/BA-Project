@@ -1,4 +1,4 @@
-"""Executive summary — the 5-second value story.
+"""Executive summary  the 5-second value story.
 
 A KPI header a professor (or a CFO) can read at a glance: volume, fraud
 exposure, money saved by the model, detection performance, and live model
@@ -11,7 +11,8 @@ import pandas as pd
 import streamlit as st
 
 import drift
-from app_common import dataset_badge, fmt_money as _money, get_ensemble, get_scored_context, model_keys, sample_mode_note
+from app_common import (dataset_badge, fmt_money as _money, get_ensemble, get_scored_context,
+                        headline_key, model_keys, sample_mode_note)
 import costs
 from reasons import reason_series
 
@@ -27,10 +28,19 @@ def render():
 
     bundle = get_ensemble()
     df, keys = get_scored_context()
+    # Headline on a single representative model (XGBoost) rather than the max-risk
+    # ensemble union: the union catches ~100% of fraud loss but at ~2% precision,
+    # which reads as unrealistic. The single model is more balanced/credible.
+    hk = headline_key(bundle)
+    decision_col = f"{hk}_decision" if f"{hk}_decision" in df.columns else "agg_decision"
+    model_label = bundle["models"][hk]["model_name"]
     y = df["isFraud"].to_numpy()
     amount = df["amount"].to_numpy(dtype=float)
-    flagged = df["agg_decision"].to_numpy() != "allow"
+    flagged = df[decision_col].to_numpy() != "allow"
     res = costs.cost_breakdown(y, flagged, amount)
+
+    st.caption(f"Headline KPIs use the **{model_label}** model. See **Cost & ROI** for every "
+               "model vs. the max-risk ensemble.")
 
     # ---- Headline KPIs ----------------------------------------------------- #
     k = st.columns(4)
@@ -39,7 +49,9 @@ def render():
                 delta=f"{res.n_fraud} cases", delta_color="off")
     k[2].metric("💶 Money saved", _money(res.net_savings),
                 help="Net € saved vs. running no model, at the deployed thresholds.")
-    k[3].metric("🛡️ Fraud loss avoided", f"{res.loss_avoided_pct:.0f}%")
+    k[3].metric("🛡️ Fraud loss avoided", f"{res.loss_avoided_pct:.1f}%",
+                delta=f"{res.fn} of {res.n_fraud} fraud missed", delta_color="off",
+                help=f"Share of € fraud exposure the {model_label} model prevents on the test split.")
 
     k2 = st.columns(4)
     k2[0].metric("Recall (fraud caught)", f"{res.recall:.0%}")
@@ -57,7 +69,7 @@ def render():
     c1, c2 = st.columns([1, 1])
     with c1:
         st.markdown("**Decision mix**")
-        mix = (df["agg_decision"].value_counts()
+        mix = (df[decision_col].value_counts()
                .reindex(["allow", "review", "block"]).fillna(0).astype(int)
                .rename_axis("decision").reset_index(name="count"))
         chart = alt.Chart(mix).mark_bar().encode(
@@ -74,7 +86,7 @@ def render():
         st.markdown("**Top risk signals on flagged transactions**")
         flagged_df = df[flagged]
         reasons = reason_series(flagged_df, top=1)  # single top reason per txn
-        top = (reasons[reasons != "—"].value_counts().head(6)
+        top = (reasons[reasons != ""].value_counts().head(6)
                .rename_axis("signal").reset_index(name="count"))
         if len(top):
             chart = alt.Chart(top).mark_bar(color="#1565C0").encode(
@@ -89,10 +101,10 @@ def render():
     st.divider()
     st.markdown("**The story, in order** (follow the sidebar top-to-bottom):")
     st.markdown(
-        "1. 💰 **Cost & ROI** — what detection is worth in € vs. naive baselines (the value)\n"
-        "2. 📡 **Live Feed** — real-time scoring stream\n"
-        "3. 📈 **Monitoring** — drift detection & automated retraining (operations)\n"
-        "4. 🧪 **API Tester** — score a transaction through the live API (serving)"
+        "1. 💰 **Cost & ROI**  what detection is worth in € vs. naive baselines (the value)\n"
+        "2. 📡 **Live Feed**  real-time scoring stream\n"
+        "3. 📈 **Monitoring**  drift detection & automated retraining (operations)\n"
+        "4. 🧪 **API Tester**  score a transaction through the live API (serving)"
     )
 
 

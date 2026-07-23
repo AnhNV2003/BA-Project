@@ -35,8 +35,22 @@ def model_keys(bundle: dict) -> list[str]:
     return list(bundle["models"].keys())
 
 
+# The single model used for the "at a glance" headline KPIs (Overview) and as the
+# default selection on Cost & ROI. The max-risk ENSEMBLE (flag if ANY model flags)
+# catches ~100% of fraud loss but at very low precision, which reads as unrealistic
+# for a headline. A strong single model (XGBoost) is more representative. The
+# ensemble remains the deployed system and is shown in full on the Cost page.
+HEADLINE_MODEL_KEY = "xgb"
+
+
+def headline_key(bundle: dict) -> str:
+    """`HEADLINE_MODEL_KEY` if present in the bundle, else the first model."""
+    keys = model_keys(bundle)
+    return HEADLINE_MODEL_KEY if HEADLINE_MODEL_KEY in keys else keys[0]
+
+
 # --------------------------------------------------------------------------- #
-# Shared display helpers — one currency formatter and one dataset badge so
+# Shared display helpers  one currency formatter and one dataset badge so
 # every page speaks the same language (consistency across the demo).
 # --------------------------------------------------------------------------- #
 CURRENCY = "€"
@@ -63,9 +77,9 @@ def dataset_badge(kind: str) -> None:
     """
     import streamlit as st
     notes = {
-        "test": "📁 **Data:** held-out temporal test split — transactions unseen at training time.",
-        "full": "📁 **Data:** full labelled population — descriptive analytics across all history.",
-        "sample": "📁 **Data:** 2,000-transaction preview batch — for interactive triage.",
+        "test": "📁 **Data:** held-out temporal test split  transactions unseen at training time.",
+        "full": "📁 **Data:** full labelled population  descriptive analytics across all history.",
+        "sample": "📁 **Data:** 2,000-transaction preview batch  for interactive triage.",
         "live": "📁 **Data:** freshly simulated real-time stream.",
     }
     st.caption(notes.get(kind, ""))
@@ -73,12 +87,12 @@ def dataset_badge(kind: str) -> None:
 
 def sample_mode_note() -> None:
     """Warn (once per page) when analytics are computed on the small committed
-    sample because the full context frame is absent — so approximate figures on
+    sample because the full context frame is absent  so approximate figures on
     a fresh clone are never mistaken for production numbers."""
     import streamlit as st
     if scored_context_is_sample():
         st.caption(
-            "⚠️ **Sample mode** — computed on the committed ~300k-row stratified "
+            "⚠️ **Sample mode**  computed on the committed ~300k-row stratified "
             "sample (neither the precomputed test split nor the full frame is "
             "present). Figures are approximate; rebuild the dataset (see "
             "docs/data_setup.md) for full numbers."
@@ -110,12 +124,12 @@ def resolve_context_path():
 
 def context_is_sample() -> bool:
     """True when the app is falling back to the small committed sample (the full
-    frame is absent) — pages use this to badge themselves as 'sample mode'."""
+    frame is absent)  pages use this to badge themselves as 'sample mode'."""
     return not CONTEXT_PARQUET.exists() and CONTEXT_SAMPLE.exists()
 
 
 def scored_context_is_sample() -> bool:
-    """True when `get_scored_context()` can only use the approximate sample — i.e.
+    """True when `get_scored_context()` can only use the approximate sample  i.e.
     neither the precomputed full-data test split nor the full frame is present."""
     return (not SCORED_TEST.exists()
             and not CONTEXT_PARQUET.exists()
@@ -131,7 +145,7 @@ def get_scored_context():
     frame, so we report on the temporal test split only (steps ≥
     `split_info.test_step_min`, unseen at fit time). Enrichment runs on the FULL
     frame first so the causal dest-history features for test rows correctly see
-    the prior history, then we filter — matching how the model was trained.
+    the prior history, then we filter  matching how the model was trained.
 
     Fast path: if the precomputed `scored_test.parquet` (built by
     `src/make_scored_test.py`) is present, read it directly (~1s) instead of
@@ -149,7 +163,7 @@ def get_scored_context():
     bundle = get_ensemble()
     keys = model_keys(bundle)
 
-    # Fast path — precomputed, already test-split-filtered and scored.
+    # Fast path  precomputed, already test-split-filtered and scored.
     if SCORED_TEST.exists():
         return pd.read_parquet(SCORED_TEST), keys
 
