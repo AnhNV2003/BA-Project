@@ -1374,9 +1374,8 @@ point Streamlit Cloud at
 \url{https://group-1-e-fraud.streamlit.app/}.
 \end{keybox}
 
-\begin{todobox}
-\textbf{Remaining for submission.} Attach Overview and Live Feed page screenshots to the appendix.
-\end{todobox}
+The Overview and Live Feed pages are shown in Appendix~\ref{app:screens}
+(Figures~\ref{fig:demo-overview}--\ref{fig:demo-livefeed-table}).
 
 %==============================================================================
 \chapter{Monitoring (Module 7)}
@@ -1461,11 +1460,10 @@ per-model prediction rows) is shown colour-banded, overlaid reference-vs-current
 explain each PSI value, and a retrain banner with the alert action appears when the trigger
 fires.
 
-\begin{todobox}
-\textbf{Remaining for submission.} Capture the rendered Evidently dashboard and one
-Monitoring-page screenshot for the appendix, and (optionally) add rolling-window
-precision/recall as labels arrive, noting the label-delay caveat inherent to fraud feedback.
-\end{todobox}
+The Monitoring page is shown in Appendix~\ref{app:screens}
+(Figure~\ref{fig:monitoring-drift}); the Evidently HTML export is optional and is not
+enabled on the deployed instance. A natural extension is rolling-window precision/recall as
+labels arrive, subject to the label-delay caveat inherent to fraud feedback.
 
 %==============================================================================
 \chapter{Risk Policy, Limitations, and Future Work (Module 8)}
@@ -1574,9 +1572,8 @@ API and a five-page analyst application, deployable to a single free-tier port, 
 honest by a PSI-based monitoring layer with a retraining trigger, in-app retraining, and
 webhook alerting. The result is not just a classifier but a complete, auditable analytics
 product: it scores transactions, explains its flags with reason codes, prices its decisions
-in currency, and watches itself for drift - closing the loop the brief asks for. With the
-live application now published, the sole remaining task is to attach the demo screenshots to
-the appendix.
+in currency, and watches itself for drift - closing the loop the brief asks for. The live
+application is published, with its key pages captured in Appendix~\ref{app:screens}.
 
 Stepping back from the pipeline, the data taught us a coherent portrait of this fraud, and each finding forced a specific design choice rather than a generic one. Fraud is \emph{rare} (0.129\%, a 774:1 imbalance) - so the model is tuned against a business cost function and judged by AUC-PR, not the accuracy the majority class would trivially win. It is \emph{nocturnal} (0.10\% by day rising to 1.77\% at night, peaking near 22\% in the 04:00--05:00 window) and \emph{large-amount} (a 0.69\% rate in the top decile, about $30\times$ the bottom) - so time-of-day and log-scaled amount became core features and the review queue is ranked by expected loss. It flows exclusively through \code{TRANSFER} and \code{CASH\_OUT}, the two exfiltration channels, with literally zero fraud in \code{PAYMENT}, \code{CASH\_IN}, or \code{DEBIT} - so a cheap structural pre-filter removes most of the stream before scoring. It is \emph{channelled into reused mule accounts}, the destination fraud rate climbing monotonically from 0.118\% at first use to 1.692\% beyond eleven reuses - so destination-reuse history became a feature and graph structure is the clearest avenue for future gains. And it is \emph{non-linear}: no signal correlates with the target above $|r|=0.08$, yet the tree ensemble reaches 0.907 AUC-PR while logistic regression manages only 0.587 - so the deployed model is a gradient-boosted tree, chosen because the phenomenon lives in the interactions, not the margins.
 
@@ -1627,6 +1624,55 @@ XGBoost & synth & no & 21 & 0.268 & 0.243 & 0.011 & 0.961 & 0.022 & 96.21\%\\
 \textbf{XGBoost} & \textbf{realistic} & \textbf{no} & \textbf{44} & \textbf{0.806} & \textbf{0.907} & \textbf{0.173} & \textbf{0.981} & \textbf{0.294} & \textbf{99.91\%}\\
 XGBoost & all & yes & 50 & 1.000 & 1.000 & 1.000 & 0.9995 & 0.9998 & 99.99\%\\
 \end{longtable}}
+
+\section{Live application screenshots}
+\label{app:screens}
+
+The screenshots below are captured from the deployed application at
+\url{https://group-1-e-fraud.streamlit.app/}. Metrics on the Overview page are computed on
+the held-out temporal test split (955{,}744 transactions, 4{,}010 fraud), so the exposure it
+reports (about 6.32 billion currency units, test window) is smaller than the
+12.06-billion full-dataset exposure quoted in Module~1; the headline percentages
+(99.9\% loss avoided, 98\% recall, 17\% precision, 2.4\% flag rate) match the deployed
+XGBoost model of Module~5.
+
+\begin{center}
+\includegraphics[width=\textwidth]{figures/demo_overview.png}
+\captionof{figure}{Overview page: headline KPIs (money saved, fraud loss avoided 99.9\%,
+recall 98\%, precision 17\%, flag rate 2.4\%, and a ``drift'' model-health flag), the
+allow/review/block decision mix, and the top risk signals on flagged transactions. All
+metrics are on the held-out test split.}
+\label{fig:demo-overview}
+\end{center}
+
+\vspace{0.5em}
+\begin{center}
+\includegraphics[width=\textwidth]{figures/demo_livefeed.png}
+\captionof{figure}{Live Feed: a simulated real-time stream scored by all three models with
+the max-risk aggregate decision; running counters (received / in review / blocked / fraud
+caught) and the review-versus-block timeline.}
+\label{fig:demo-livefeed}
+\end{center}
+
+\vspace{0.5em}
+\begin{center}
+\includegraphics[width=\textwidth]{figures/demo_livefeed_table.png}
+\captionof{figure}{Live Feed transaction table: per-model scores (\code{logreg\_score},
+\code{rf\_score}, \code{xgb\_score}), the aggregated allow/review/block decision, and the
+raw features. Rows where one model is confident while another is not are still escalated by
+the max-risk rule.}
+\label{fig:demo-livefeed-table}
+\end{center}
+
+\vspace{0.5em}
+\begin{center}
+\includegraphics[width=\textwidth]{figures/monitoring_drift_report.png}
+\captionof{figure}{Monitoring page (Reports tab): the committed drift report. The PSI table
+contrasts a natural day-split (all \emph{stable}) with a simulated fraud campaign, which
+trips the retraining trigger (PSI $\ge 0.25$) on \code{ip\_billing\_distance\_km},
+\code{num\_failed\_payment\_attempts}, and \code{PREDICTION\_SCORE\_xgb}.}
+\label{fig:monitoring-drift}
+\end{center}
 
 \section{Reproducibility}
 
