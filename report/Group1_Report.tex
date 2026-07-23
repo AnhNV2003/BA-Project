@@ -170,9 +170,8 @@ of fraud loss while flagging only \textbf{2.4\%} of transactions.
 The model is then productionised as a complete analytics product: a \textbf{three-model
 ensemble} (Logistic Regression, Random Forest, XGBoost) served behind a FastAPI
 \code{/score} endpoint that returns each model's verdict plus a \emph{max-risk} aggregate
-(\code{block > review > allow}); an eight-page Streamlit analyst application (executive
-overview, segment analytics, review queue with reason codes, model evaluation, cost/ROI,
-live feed, monitoring, and an API tester) deployable to a single free-tier port via an
+(\code{block > review > allow}); a five-page Streamlit analyst application (executive
+overview, cost/ROI, live feed, monitoring, and an API tester) deployable to a single free-tier port via an
 embedded API; and a monitoring layer that tracks per-feature and per-model
 Population-Stability-Index (PSI) drift, fires a retraining trigger at PSI $\ge 0.25$,
 supports in-app retraining, and emits webhook alerts. This report documents the full
@@ -1266,7 +1265,7 @@ app in \emph{sample mode} without the full rebuild.
 %==============================================================================
 
 The deployable model of Chapter~\ref{ch:m5} is packaged into a working analytics product:
-a real-time scoring API and an eight-page analyst application, engineered to run on a single
+a real-time scoring API and a five-page analyst application, engineered to run on a single
 free-tier cloud port. All money figures across the API, the app, and this report come from
 one shared cost module (\code{src/costs.py}), so the three can never disagree on what a
 decision is worth.
@@ -1329,11 +1328,11 @@ of operating spend). The Cost \& ROI page lets an analyst edit the cost matrix l
 the cost-optimal threshold move - making the fraud/friction trade-off tangible in currency
 rather than abstract metrics.
 
-\section{Eight-page analyst application}
+\section{Five-page analyst application}
 
 A multi-page Streamlit application (\code{app/streamlit\_app.py} via \code{st.navigation})
-presents the product as a capstone narrative - pitch $\to$ problem $\to$ product $\to$ rigour
-$\to$ value $\to$ real-time $\to$ operations $\to$ serving (Table~\ref{tab:pages}). Every
+presents the product as a capstone narrative - overview $\to$ value $\to$ real-time $\to$
+operations $\to$ serving (Table~\ref{tab:pages}). Every
 analytical page carries a data-provenance badge, and model metrics are always reported on the
 held-out temporal test split.
 
@@ -1344,17 +1343,14 @@ held-out temporal test split.
 \toprule
 \textbf{Page} & \textbf{What it shows} & \textbf{Data}\\
 \midrule
-Overview & Executive KPIs: money saved, fraud loss avoided, recall/precision, model health & test\\
-Segment Analytics & Where fraud concentrates: by type, hour, amount + risk-factor lift & full population\\
-Review Queue & Triage with per-transaction reason codes; 3 models + max-risk verdict & 2k sample\\
-Model Evaluation & AUC-PR / ROC / PR curves, confusion matrix, cumulative-gains / lift & test\\
+Overview & Executive KPIs (money saved, fraud loss avoided, recall/precision, model health) plus decision-mix and top-risk-signal charts & test\\
 Cost \& ROI & Prices the trade-off in money terms; per-model vs.\ ensemble; editable cost matrix & test\\
-Live Feed & Simulated real-time scoring stream & simulated\\
+Live Feed & Simulated real-time scoring stream: 3 models + max-risk decision, flagged-over-time timeline & simulated\\
 Monitoring & PSI drift detection $\to$ retraining + alerting (Chapter~\ref{ch:m7}) & simulated\\
 API Tester & Score a hand-built transaction through the live \code{/score} endpoint & live API\\
 \bottomrule
 \end{tabularx}
-\caption{The eight pages of the Streamlit analyst application.}
+\caption{The five pages of the Streamlit analyst application.}
 \label{tab:pages}
 \end{table}
 
@@ -1373,10 +1369,13 @@ point Streamlit Cloud at
 \code{app/streamlit\_app.py}, and let \code{requirements.txt} and \code{packages.txt}
 (\code{libgomp1} for XGBoost) install automatically.
 
+\begin{keybox}
+\textbf{Live application (graded deliverable).} Deployed on Streamlit Community Cloud:
+\url{https://group-1-e-fraud.streamlit.app/}.
+\end{keybox}
+
 \begin{todobox}
-\textbf{Remaining for submission.} Publish the app to a free tier and paste the resulting
-\textbf{live link} here (a graded deliverable), together with one or two screenshots of the
-review queue and monitoring pages.
+\textbf{Remaining for submission.} Attach Overview and Live Feed page screenshots to the appendix.
 \end{todobox}
 
 %==============================================================================
@@ -1550,11 +1549,10 @@ The operating precision of 0.173 should not be mistaken for a modelling weakness
 
 \section{Presentation and demo}
 
-The deliverable is presented to the class through the live eight-page Streamlit application:
-the narrative runs pitch $\to$ problem (Segment Analytics) $\to$ product (Review Queue)
-$\to$ rigour (Model Evaluation) $\to$ value (Cost \& ROI) $\to$ real-time (Live Feed)
-$\to$ operations (Monitoring) $\to$ serving (API Tester), mirroring the structure of this
-report.
+The deliverable is presented to the class through the live five-page Streamlit application
+(\url{https://group-1-e-fraud.streamlit.app/}): the narrative runs overview $\to$ value
+(Cost \& ROI) $\to$ real-time (Live Feed) $\to$ operations (Monitoring) $\to$ serving
+(API Tester), mirroring the structure of this report.
 
 %==============================================================================
 \chapter{Conclusion}
@@ -1572,12 +1570,13 @@ loss while flagging only 2.4\% of transactions - an operating point chosen not b
 but by an explicit business cost function.
 
 That model is productionised as a three-model max-risk ensemble behind a real-time scoring
-API and an eight-page analyst application, deployable to a single free-tier port, and kept
+API and a five-page analyst application, deployable to a single free-tier port, and kept
 honest by a PSI-based monitoring layer with a retraining trigger, in-app retraining, and
 webhook alerting. The result is not just a classifier but a complete, auditable analytics
 product: it scores transactions, explains its flags with reason codes, prices its decisions
-in currency, and watches itself for drift - closing the loop the brief asks for. The one
-remaining task is to publish the public live link and attach demo screenshots.
+in currency, and watches itself for drift - closing the loop the brief asks for. With the
+live application now published, the sole remaining task is to attach the demo screenshots to
+the appendix.
 
 Stepping back from the pipeline, the data taught us a coherent portrait of this fraud, and each finding forced a specific design choice rather than a generic one. Fraud is \emph{rare} (0.129\%, a 774:1 imbalance) - so the model is tuned against a business cost function and judged by AUC-PR, not the accuracy the majority class would trivially win. It is \emph{nocturnal} (0.10\% by day rising to 1.77\% at night, peaking near 22\% in the 04:00--05:00 window) and \emph{large-amount} (a 0.69\% rate in the top decile, about $30\times$ the bottom) - so time-of-day and log-scaled amount became core features and the review queue is ranked by expected loss. It flows exclusively through \code{TRANSFER} and \code{CASH\_OUT}, the two exfiltration channels, with literally zero fraud in \code{PAYMENT}, \code{CASH\_IN}, or \code{DEBIT} - so a cheap structural pre-filter removes most of the stream before scoring. It is \emph{channelled into reused mule accounts}, the destination fraud rate climbing monotonically from 0.118\% at first use to 1.692\% beyond eleven reuses - so destination-reuse history became a feature and graph structure is the clearest avenue for future gains. And it is \emph{non-linear}: no signal correlates with the target above $|r|=0.08$, yet the tree ensemble reaches 0.907 AUC-PR while logistic regression manages only 0.587 - so the deployed model is a gradient-boosted tree, chosen because the phenomenon lives in the interactions, not the margins.
 
