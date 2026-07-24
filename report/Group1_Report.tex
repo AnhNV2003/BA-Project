@@ -1202,13 +1202,6 @@ The 17\% precision at threshold 0.241 is the single number most likely to be mis
 
 What stops the threshold from collapsing to zero - the degenerate policy Logistic Regression fell into - is the review-labour term $c_{MR}$. Every flag consumes a scarce analyst, so the cost function charges for the queue itself; the 2.38\% flagged rate is the point at which the marginal review cost of one more flag just balances the marginal fraud it expects to catch. This ties the statistical operating point directly to an operational constraint: a precision of 17\% is affordable only because the queue can absorb roughly one flagged transaction in forty-two, and it is why the downstream policy prioritises the queue by \emph{expected loss} (risk $\times$ amount). When capacity binds, scarce analyst time should chase the largest exposures first rather than the highest scores - precision is a review-capacity problem, not a modelling ceiling.
 
-\begin{warnbox}
-\textbf{Honesty note.} We deliberately do \emph{not} headline the AUC-PR$\approx$1.0
-achievable with balance features. Those numbers are real but non-deployable; reporting them
-as the result would be misleading. The deployable 0.907 is the number the business can
-actually rely on at authorization time.
-\end{warnbox}
-
 \section{From a single model to a deployed three-model ensemble}
 \label{sec:ensemble}
 
